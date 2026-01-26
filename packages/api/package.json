@@ -1,0 +1,27 @@
+{
+  "name": "@ai-company/api",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./src/index.ts"
+    },
+    "./*": {
+      "default": "./src/*.ts"
+    }
+  },
+  "scripts": {},
+  "dependencies": {
+    "@ai-company/auth": "workspace:*",
+    "@ai-company/db": "workspace:*",
+    "@ai-company/env": "workspace:*",
+    "@trpc/client": "catalog:",
+    "@trpc/server": "catalog:",
+    "dotenv": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@ai-company/config": "workspace:*",
+    "hono": "catalog:",
+    "typescript": "^5"
+  }
+}

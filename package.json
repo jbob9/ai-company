@@ -1,0 +1,33 @@
+{
+  "name": "ai-company",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "type": "module",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "check-types": "turbo check-types",
+    "dev:native": "turbo -F native dev",
+    "dev:web": "turbo -F web dev",
+    "dev:server": "turbo -F server dev",
+    "db:push": "turbo -F @ai-company/db db:push",
+    "db:studio": "turbo -F @ai-company/db db:studio",
+    "db:generate": "turbo -F @ai-company/db db:generate",
+    "db:migrate": "turbo -F @ai-company/db db:migrate"
+  },
+  "dependencies": {
+    "@ai-company/env": "workspace:*",
+    "dotenv": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@ai-company/config": "workspace:*",
+    "@types/node": "^22.13.14",
+    "turbo": "^2.6.3",
+    "typescript": "^5"
+  },
+  "packageManager": "pnpm@10.28.0"
+}
