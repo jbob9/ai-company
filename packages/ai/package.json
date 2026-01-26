@@ -1,5 +1,5 @@
 {
-  "name": "@ai-company/api",
+  "name": "@ai-company/ai",
   "type": "module",
   "exports": {
     ".": {
@@ -11,19 +11,13 @@
   },
   "scripts": {},
   "dependencies": {
-    "@ai-company/ai": "workspace:*",
-    "@ai-company/auth": "workspace:*",
     "@ai-company/db": "workspace:*",
     "@ai-company/env": "workspace:*",
-    "@trpc/client": "catalog:",
-    "@trpc/server": "catalog:",
-    "dotenv": "catalog:",
-    "nanoid": "^5.1.5",
+    "@anthropic-ai/sdk": "^0.39.0",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@ai-company/config": "workspace:*",
-    "hono": "catalog:",
     "typescript": "^5"
   }
 }
