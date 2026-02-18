@@ -1,12 +1,12 @@
 import { z } from "zod";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, lt } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { TRPCError } from "@trpc/server";
 
 import { protectedProcedure, router } from "../index";
 import { db } from "@ai-company/db";
 import { company, companyMember } from "@ai-company/db/schema/companies";
-import { department, departmentTypeEnum } from "@ai-company/db/schema/departments";
+import { department, departmentDocument, departmentTypeEnum } from "@ai-company/db/schema/departments";
 import { kpiDefinition, kpiValue } from "@ai-company/db/schema/metrics";
 import {
   aiConversation,
@@ -110,6 +110,17 @@ async function getDepartmentContext(
     ),
   });
 
+  let documents: { category: string; title: string; content: string }[] = [];
+  if (dept) {
+    const docs = await db.query.departmentDocument.findMany({
+      where: eq(departmentDocument.departmentId, dept.id),
+      orderBy: (d, { asc }) => [asc(d.sortOrder), asc(d.createdAt)],
+    });
+    documents = docs
+      .filter((d) => d.content.trim().length > 0)
+      .map((d) => ({ category: d.category, title: d.title, content: d.content }));
+  }
+
   return {
     departmentType,
     companyName: comp.name,
@@ -117,6 +128,7 @@ async function getDepartmentContext(
     headcount: dept?.headcount ? parseInt(dept.headcount) : undefined,
     goals: (dept?.goals as string[]) ?? undefined,
     customInstructions: dept?.context ?? undefined,
+    documents,
   };
 }
 
@@ -205,11 +217,13 @@ export const aiRouter = router({
         }
       } else {
         conversationId = nanoid();
+        const title = input.message.slice(0, 80).trim();
         await db.insert(aiConversation).values({
           id: conversationId,
           companyId: input.companyId,
           userId: ctx.session.user.id,
           departmentType: input.departmentType,
+          title: title || "New chat",
         });
       }
 
@@ -453,6 +467,82 @@ export const aiRouter = router({
         ...conversation,
         messages: conversation.messages.reverse(),
       };
+    }),
+
+  listMessages: protectedProcedure
+    .input(
+      z.object({
+        conversationId: z.string(),
+        limit: z.number().int().min(1).max(50).default(20),
+        before: z.string().datetime().optional(), // ISO date: fetch messages older than this (for "load more" at top)
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const conversation = await db.query.aiConversation.findFirst({
+        where: eq(aiConversation.id, input.conversationId),
+      });
+      if (!conversation) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Conversation not found",
+        });
+      }
+      await checkCompanyAccess(ctx.session.user.id, conversation.companyId);
+      if (conversation.userId !== ctx.session.user.id) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Access denied",
+        });
+      }
+
+      const conditions = [eq(aiMessage.conversationId, input.conversationId)];
+      if (input.before) {
+        conditions.push(lt(aiMessage.createdAt, new Date(input.before)));
+      }
+      const raw = await db.query.aiMessage.findMany({
+        where: and(...conditions),
+        orderBy: [desc(aiMessage.createdAt)],
+        limit: input.limit + 1,
+      });
+      const hasMore = raw.length > input.limit;
+      const page = hasMore ? raw.slice(0, input.limit) : raw;
+      const messages = [...page].reverse(); // chronological order for display
+      return {
+        messages,
+        hasMore,
+      };
+    }),
+
+  updateConversation: protectedProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        title: z.string().min(1).max(200).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const conversation = await db.query.aiConversation.findFirst({
+        where: eq(aiConversation.id, input.id),
+      });
+      if (!conversation) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Conversation not found",
+        });
+      }
+      if (conversation.userId !== ctx.session.user.id) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Access denied",
+        });
+      }
+      if (input.title !== undefined) {
+        await db
+          .update(aiConversation)
+          .set({ title: input.title, updatedAt: new Date() })
+          .where(eq(aiConversation.id, input.id));
+      }
+      return { success: true };
     }),
 
   deleteConversation: protectedProcedure

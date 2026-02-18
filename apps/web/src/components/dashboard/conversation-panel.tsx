@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router";
 import { Search, MessageSquare, Plus, Bot } from "lucide-react";
 import { useState } from "react";
 
@@ -18,17 +19,20 @@ const deptLabels: Record<string, string> = {
 };
 
 interface ConversationPanelProps {
+  companyId?: string | null;
   activeConversationId?: string | null;
   onSelectConversation?: (conversationId: string) => void;
   onNewChat?: () => void;
 }
 
 export function ConversationPanel({
+  companyId: companyIdProp,
   activeConversationId,
   onSelectConversation,
   onNewChat,
 }: ConversationPanelProps) {
   const { company } = useCompany();
+  const companyId = companyIdProp ?? company?.id;
   const [searchQuery, setSearchQuery] = useState("");
 
   const { data: conversations = [] } = useQuery({
@@ -47,7 +51,7 @@ export function ConversationPanel({
       )
     : conversations;
 
-  function timeAgo(date: Date) {
+  function timeAgo(date: Date | string) {
     const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
     if (seconds < 60) return "just now";
     const minutes = Math.floor(seconds / 60);
@@ -82,17 +86,11 @@ export function ConversationPanel({
         {filtered.length > 0 ? (
           filtered.map((conversation) => {
             const isActive = conversation.id === activeConversationId;
-            return (
-              <button
-                key={conversation.id}
-                onClick={() => onSelectConversation?.(conversation.id)}
-                className={cn(
-                  "w-full text-left p-3 rounded-xl transition-colors group",
-                  isActive
-                    ? "bg-foreground/6"
-                    : "hover:bg-foreground/3"
-                )}
-              >
+            const to = companyId
+              ? `/dashboard/${companyId}/chat/${conversation.id}`
+              : "#";
+            const content = (
+              <>
                 <div className="flex items-start justify-between gap-2">
                   <h3 className="text-[13px] font-medium truncate leading-snug">
                     {conversation.title ||
@@ -119,6 +117,35 @@ export function ConversationPanel({
                     </span>
                   )}
                 </div>
+              </>
+            );
+            return companyId ? (
+              <Link
+                key={conversation.id}
+                to={to}
+                onClick={() => onSelectConversation?.(conversation.id)}
+                className={cn(
+                  "block w-full text-left p-3 rounded-xl transition-colors group",
+                  isActive
+                    ? "bg-foreground/6"
+                    : "hover:bg-foreground/3"
+                )}
+              >
+                {content}
+              </Link>
+            ) : (
+              <button
+                key={conversation.id}
+                type="button"
+                onClick={() => onSelectConversation?.(conversation.id)}
+                className={cn(
+                  "w-full text-left p-3 rounded-xl transition-colors group",
+                  isActive
+                    ? "bg-foreground/6"
+                    : "hover:bg-foreground/3"
+                )}
+              >
+                {content}
               </button>
             );
           })

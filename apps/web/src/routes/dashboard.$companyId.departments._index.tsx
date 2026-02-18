@@ -1,4 +1,4 @@
-import { useParams } from "react-router";
+import { useParams, Link } from "react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Plus,
@@ -114,10 +114,11 @@ export default function DepartmentsPage() {
           {departments.map((dept) => {
             const Icon = deptIcons[dept.type] || Package;
             return (
-              <div
+              <Link
                 key={dept.id}
+                to={`/dashboard/${companyId}/departments/${dept.type}`}
                 className={cn(
-                  "glass-panel rounded-xl p-5 transition-colors",
+                  "glass-panel rounded-xl p-5 transition-colors block",
                   dept.isEnabled ? "hover:bg-foreground/2" : "opacity-50"
                 )}
               >
@@ -141,7 +142,7 @@ export default function DepartmentsPage() {
                 <p className="text-[12px] text-muted-foreground mt-0.5 capitalize">
                   {dept.type.replace("_", " ")}
                 </p>
-              </div>
+              </Link>
             );
           })}
         </div>

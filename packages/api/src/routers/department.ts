@@ -8,10 +8,13 @@ import { db } from "@ai-company/db";
 import { companyMember } from "@ai-company/db/schema/companies";
 import {
   department,
+  departmentDocument,
   departmentTypeEnum,
   type DepartmentAIConfig,
 } from "@ai-company/db/schema/departments";
 import { departmentNames } from "@ai-company/ai";
+import type { DepartmentType } from "@ai-company/ai";
+import { getDefaultDocuments } from "../utils/department-templates";
 
 // Helper to check company membership
 async function checkCompanyAccess(userId: string, companyId: string) {
@@ -30,6 +33,22 @@ async function checkCompanyAccess(userId: string, companyId: string) {
   }
 
   return membership;
+}
+
+async function seedDefaultDocuments(deptId: string, deptType: DepartmentType) {
+  const templates = getDefaultDocuments(deptType);
+  if (templates.length > 0) {
+    await db.insert(departmentDocument).values(
+      templates.map((t) => ({
+        id: nanoid(),
+        departmentId: deptId,
+        category: t.category as typeof departmentDocument.$inferInsert.category,
+        title: t.title,
+        content: t.content,
+        sortOrder: t.sortOrder,
+      }))
+    );
+  }
 }
 
 // Validation schemas
@@ -103,6 +122,29 @@ export const departmentRouter = router({
       return dept;
     }),
 
+  // Get a department by company + type
+  getByType: protectedProcedure
+    .input(z.object({ companyId: z.string(), type: z.enum(departmentTypeEnum.enumValues) }))
+    .query(async ({ ctx, input }) => {
+      await checkCompanyAccess(ctx.session.user.id, input.companyId);
+
+      const dept = await db.query.department.findFirst({
+        where: and(
+          eq(department.companyId, input.companyId),
+          eq(department.type, input.type)
+        ),
+      });
+
+      if (!dept) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Department not found",
+        });
+      }
+
+      return dept;
+    }),
+
   // Create a new department
   create: protectedProcedure
     .input(createDepartmentInput)
@@ -146,6 +188,8 @@ export const departmentRouter = router({
         context: input.context,
         aiConfig: input.aiConfig as DepartmentAIConfig,
       });
+
+      await seedDefaultDocuments(deptId, input.type);
 
       const newDept = await db.query.department.findFirst({
         where: eq(department.id, deptId),
@@ -291,13 +335,16 @@ export const departmentRouter = router({
       const toCreate = deptTypes.filter((type) => !existingTypes.has(type));
 
       if (toCreate.length > 0) {
-        await db.insert(department).values(
-          toCreate.map((type) => ({
-            id: nanoid(),
-            companyId: input.companyId,
-            type,
-            name: departmentNames[type],
-          }))
+        const newDepts = toCreate.map((type) => ({
+          id: nanoid(),
+          companyId: input.companyId,
+          type,
+          name: departmentNames[type],
+        }));
+        await db.insert(department).values(newDepts);
+
+        await Promise.all(
+          newDepts.map((d) => seedDefaultDocuments(d.id, d.type))
         );
       }
 

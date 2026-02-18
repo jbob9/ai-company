@@ -25,6 +25,13 @@ export interface MetricData {
   recordedAt: Date;
 }
 
+// A context document attached to a department
+export interface DepartmentDocumentData {
+  category: string;
+  title: string;
+  content: string;
+}
+
 // Department context for AI agents
 export interface DepartmentContext {
   departmentType: DepartmentType;
@@ -33,6 +40,7 @@ export interface DepartmentContext {
   headcount?: number;
   goals?: string[];
   customInstructions?: string;
+  documents?: DepartmentDocumentData[];
 }
 
 // Company context for orchestration AI

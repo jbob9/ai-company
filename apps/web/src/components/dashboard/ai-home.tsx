@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useNavigate } from "react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Send,
@@ -44,6 +45,7 @@ export function AIHome({ activeDepartment, onDepartmentChange }: AIHomeProps) {
   const { company } = useCompany();
   const { data: session } = authClient.useSession();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -76,12 +78,16 @@ export function AIHome({ activeDepartment, onDepartmentChange }: AIHomeProps) {
       });
     },
     onSuccess: (data) => {
+      const isNewConversation = !conversationId;
       setConversationId(data.conversationId);
       setMessages((prev) => [
         ...prev,
         { role: "assistant", content: data.content },
       ]);
       queryClient.invalidateQueries({ queryKey: ["ai", "listConversations"] });
+      if (isNewConversation && data.conversationId && company?.id) {
+        navigate(`/dashboard/${company.id}/chat/${data.conversationId}`);
+      }
     },
   });
 

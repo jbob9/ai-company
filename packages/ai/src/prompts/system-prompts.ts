@@ -138,6 +138,23 @@ ${metrics
 `;
   }
 
+  if (context.documents && context.documents.length > 0) {
+    const categoryLabels: Record<string, string> = {
+      role: "DEPARTMENT ROLE & MISSION",
+      kpis: "KPI DEFINITIONS & TARGETS",
+      monitoring: "MONITORING GUIDE",
+      actions: "ACTION PLAYBOOKS",
+      improvements: "IMPROVEMENT PLAN",
+      general: "ADDITIONAL CONTEXT",
+    };
+    prompt += `DEPARTMENT CONTEXT DOCUMENTS:\n`;
+    for (const doc of context.documents) {
+      const label = categoryLabels[doc.category] || doc.category.toUpperCase();
+      prompt += `\n--- ${label}: ${doc.title} ---\n${doc.content}\n`;
+    }
+    prompt += "\n";
+  }
+
   if (context.customInstructions) {
     prompt += `ADDITIONAL INSTRUCTIONS:
 ${context.customInstructions}

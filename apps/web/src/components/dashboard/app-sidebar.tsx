@@ -16,6 +16,7 @@ import {
   Settings as SettingsIcon,
   Users,
   LogOut,
+  FileText,
   type LucideIcon,
 } from "lucide-react";
 import { useState } from "react";
@@ -149,26 +150,38 @@ export function AppSidebar({ onSelectAgent, activeAgent }: AppSidebarProps) {
               const Icon = deptIcons[dept.type] || Package;
               const isActive = activeAgent === dept.type;
               return (
-                <button
+                <div
                   key={dept.type}
-                  onClick={() => {
-                    if (onSelectAgent) {
-                      onSelectAgent(dept.type);
-                    }
-                    if (location.pathname !== basePath) {
-                      navigate(basePath);
-                    }
-                  }}
                   className={cn(
-                    "flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] font-medium transition-colors text-left w-full",
+                    "flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] font-medium transition-colors w-full group",
                     isActive
                       ? "text-foreground bg-primary/10"
                       : "text-muted-foreground hover:text-foreground hover:bg-foreground/3"
                   )}
                 >
-                  <Icon className="h-4 w-4" />
-                  {deptLabels[dept.type] || dept.name}
-                </button>
+                  <button
+                    onClick={() => {
+                      if (onSelectAgent) {
+                        onSelectAgent(dept.type);
+                      }
+                      if (location.pathname !== basePath) {
+                        navigate(basePath);
+                      }
+                    }}
+                    className="flex items-center gap-2.5 flex-1 min-w-0 text-left"
+                  >
+                    <Icon className="h-4 w-4 shrink-0" />
+                    <span className="truncate">{deptLabels[dept.type] || dept.name}</span>
+                  </button>
+                  <Link
+                    to={`${basePath}/departments/${dept.type}`}
+                    className="shrink-0 p-1 rounded text-muted-foreground/50 hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="View context"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <FileText className="h-3.5 w-3.5" />
+                  </Link>
+                </div>
               );
             })}
           </div>

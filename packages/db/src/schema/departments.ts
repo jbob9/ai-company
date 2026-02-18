@@ -6,6 +6,7 @@ import {
   pgEnum,
   boolean,
   jsonb,
+  integer,
   index,
 } from "drizzle-orm/pg-core";
 import { company } from "./companies";
@@ -60,6 +61,40 @@ export const department = pgTable(
   ]
 );
 
+// Document categories for department context
+export const documentCategoryEnum = pgEnum("document_category", [
+  "role",
+  "kpis",
+  "monitoring",
+  "actions",
+  "improvements",
+  "general",
+]);
+
+// Markdown context documents for a department
+export const departmentDocument = pgTable(
+  "department_document",
+  {
+    id: text("id").primaryKey(),
+    departmentId: text("department_id")
+      .notNull()
+      .references(() => department.id, { onDelete: "cascade" }),
+    category: documentCategoryEnum("category").notNull(),
+    title: text("title").notNull(),
+    content: text("content").notNull().default(""),
+    sortOrder: integer("sort_order").default(0).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("doc_department_idx").on(table.departmentId),
+    index("doc_category_idx").on(table.category),
+  ]
+);
+
 // Type for AI configuration
 export interface DepartmentAIConfig {
   // Alert thresholds
@@ -72,9 +107,20 @@ export interface DepartmentAIConfig {
 }
 
 // Relations
-export const departmentRelations = relations(department, ({ one }) => ({
+export const departmentRelations = relations(department, ({ one, many }) => ({
   company: one(company, {
     fields: [department.companyId],
     references: [company.id],
   }),
+  documents: many(departmentDocument),
 }));
+
+export const departmentDocumentRelations = relations(
+  departmentDocument,
+  ({ one }) => ({
+    department: one(department, {
+      fields: [departmentDocument.departmentId],
+      references: [department.id],
+    }),
+  })
+);

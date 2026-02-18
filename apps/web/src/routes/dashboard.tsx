@@ -95,6 +95,8 @@ function DashboardInner() {
     location.pathname === basePath ||
     location.pathname === basePath + "/";
   const isSubPage = !isHomePath && location.pathname.startsWith(basePath);
+  const chatMatch = location.pathname.match(/^\/dashboard\/([^/]+)\/chat\/([^/]+)$/);
+  const activeChatId = chatMatch ? chatMatch[2] : undefined;
 
   useEffect(() => {
     if (!isLoading && company && location.pathname === "/dashboard") {
@@ -246,6 +248,8 @@ function DashboardInner() {
               </button>
               <div className="flex-1 overflow-y-auto min-h-0 flex flex-col">
                 <ConversationPanel
+                  companyId={company?.id}
+                  activeConversationId={activeChatId}
                   onNewChat={() => {
                     setActiveAgent(undefined);
                     if (location.pathname !== basePath) navigate(basePath);

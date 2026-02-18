@@ -1,6 +1,7 @@
 import { protectedProcedure, publicProcedure, router } from "../index";
 import { companyRouter } from "./company";
 import { departmentRouter } from "./department";
+import { departmentDocumentRouter } from "./department-document";
 import { metricsRouter } from "./metrics";
 import { alertsRouter } from "./alerts";
 import { recommendationsRouter } from "./recommendations";
@@ -24,6 +25,7 @@ export const appRouter = router({
   // Domain routers
   company: companyRouter,
   department: departmentRouter,
+  departmentDocument: departmentDocumentRouter,
   metrics: metricsRouter,
   alerts: alertsRouter,
   recommendations: recommendationsRouter,
