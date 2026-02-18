@@ -7,6 +7,15 @@ import { alert, type AlertDetails } from "@ai-company/db/schema/alerts";
 import { createAIService } from "@ai-company/ai";
 import { env } from "@ai-company/env/server";
 
+function getAIApiKey(): string | undefined {
+  const keyMap: Record<string, string | undefined> = {
+    gemini: env.GOOGLE_AI_API_KEY,
+    openai: env.OPENAI_API_KEY,
+    anthropic: env.ANTHROPIC_API_KEY,
+  };
+  return keyMap[env.AI_PROVIDER];
+}
+
 interface AlertCheckResult {
   created: number;
   checked: number;
@@ -73,9 +82,10 @@ export async function checkAlertsForCompany(companyId: string): Promise<AlertChe
         let aiInsight: string | undefined;
         let aiRecommendation: string | undefined;
 
-        if (env.ANTHROPIC_API_KEY) {
+        const aiApiKey = getAIApiKey();
+        if (aiApiKey) {
           try {
-            const aiService = createAIService({ apiKey: env.ANTHROPIC_API_KEY });
+            const aiService = createAIService({ provider: env.AI_PROVIDER, apiKey: aiApiKey });
             const agent = aiService.getDepartmentAgent(
               companyId,
               {

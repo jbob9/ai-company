@@ -1,4 +1,5 @@
 import { BaseAgent } from "./base-agent";
+import type { AIProvider } from "../providers/types";
 import {
   getOrchestrationSystemPrompt,
   departmentNames,
@@ -19,12 +20,12 @@ export class OrchestrationAgent extends BaseAgent {
   private departmentSummaries: Record<DepartmentType, string>;
 
   constructor(
-    apiKey: string,
+    provider: AIProvider,
+    agentConfig: Required<AgentConfig>,
     context: CompanyContext,
     departmentSummaries: Record<DepartmentType, string> = {} as Record<DepartmentType, string>,
-    config?: AgentConfig
   ) {
-    super(apiKey, config);
+    super(provider, agentConfig);
     this.context = context;
     this.departmentSummaries = departmentSummaries;
   }
@@ -288,10 +289,10 @@ Provide in JSON format:
 }
 
 export function createOrchestrationAgent(
-  apiKey: string,
+  provider: AIProvider,
+  agentConfig: Required<AgentConfig>,
   context: CompanyContext,
   departmentSummaries?: Record<DepartmentType, string>,
-  config?: AgentConfig
 ): OrchestrationAgent {
-  return new OrchestrationAgent(apiKey, context, departmentSummaries, config);
+  return new OrchestrationAgent(provider, agentConfig, context, departmentSummaries);
 }

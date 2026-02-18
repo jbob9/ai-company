@@ -41,14 +41,29 @@ async function checkCompanyAccess(userId: string, companyId: string) {
 }
 
 function getAIService() {
-  if (!env.ANTHROPIC_API_KEY) {
+  const provider = env.AI_PROVIDER;
+
+  const keyMap: Record<string, string | undefined> = {
+    gemini: env.GOOGLE_AI_API_KEY,
+    openai: env.OPENAI_API_KEY,
+    anthropic: env.ANTHROPIC_API_KEY,
+  };
+
+  const apiKey = keyMap[provider];
+  if (!apiKey) {
+    const envVar =
+      provider === "gemini"
+        ? "GOOGLE_AI_API_KEY"
+        : provider === "openai"
+          ? "OPENAI_API_KEY"
+          : "ANTHROPIC_API_KEY";
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
-      message: "AI service not configured. Please set ANTHROPIC_API_KEY.",
+      message: `AI service not configured. Set ${envVar} for the "${provider}" provider.`,
     });
   }
 
-  return createAIService({ apiKey: env.ANTHROPIC_API_KEY });
+  return createAIService({ provider, apiKey });
 }
 
 async function getCompanyContext(companyId: string): Promise<CompanyContext> {

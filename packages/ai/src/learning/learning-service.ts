@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import type { AIProvider } from "../providers/types";
 
 export interface RecommendationOutcome {
   recommendationId: string;
@@ -44,10 +44,12 @@ export interface ImprovedPromptContext {
 }
 
 export class LearningService {
-  private client: Anthropic;
+  private provider: AIProvider;
+  private model: string;
 
-  constructor(apiKey: string) {
-    this.client = new Anthropic({ apiKey });
+  constructor(provider: AIProvider, model: string) {
+    this.provider = provider;
+    this.model = model;
   }
 
   analyzeOutcomes(outcomes: RecommendationOutcome[]): LearningInsights {
@@ -141,16 +143,13 @@ Provide learning insights as JSON:
   "contextualGuidance": "A paragraph of guidance for future recommendations"
 }`;
 
-    const response = await this.client.messages.create({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 1024,
+    const result = await this.provider.chat({
+      model: this.model,
       messages: [{ role: "user", content: prompt }],
+      maxTokens: 1024,
     });
 
-    const textContent = response.content.find((c) => c.type === "text");
-    const content = textContent?.type === "text" ? textContent.text : "";
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-
+    const jsonMatch = result.content.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       return {
         successfulPatterns: [],
@@ -180,25 +179,21 @@ Provide learning insights as JSON:
     if (context.successfulPatterns.length > 0) {
       addition += "Successful patterns: " + context.successfulPatterns.join("; ") + "\n";
     }
-
     if (context.failedPatterns.length > 0) {
       addition += "Avoid these patterns: " + context.failedPatterns.join("; ") + "\n";
     }
-
     if (context.preferredTypes.length > 0) {
       addition += "Preferred recommendation types: " + context.preferredTypes.join(", ") + "\n";
     }
-
     if (context.avoidedTypes.length > 0) {
       addition += "Be cautious with: " + context.avoidedTypes.join(", ") + "\n";
     }
-
     addition += "\nGuidance: " + context.contextualGuidance;
 
     return addition;
   }
 }
 
-export function createLearningService(apiKey: string): LearningService {
-  return new LearningService(apiKey);
+export function createLearningService(provider: AIProvider, model: string): LearningService {
+  return new LearningService(provider, model);
 }

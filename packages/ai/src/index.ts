@@ -1,6 +1,25 @@
 // Types
 export * from "./types";
 
+// Providers
+export {
+  type AIProvider,
+  type ChatParams,
+  type ChatMessage,
+  type ChatResult,
+  type ProviderName,
+  type ProviderConfig,
+  DEFAULT_MODELS,
+  AnthropicProvider,
+  GeminiProvider,
+  OpenAIProvider,
+  registerProvider,
+  createProvider,
+  createProviderFromConfig,
+  getDefaultModel,
+  listProviders,
+} from "./providers";
+
 // Prompts
 export {
   departmentKPIs,

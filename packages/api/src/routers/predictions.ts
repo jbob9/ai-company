@@ -7,7 +7,12 @@ import { db } from "@ai-company/db";
 import { company, companyMember } from "@ai-company/db/schema/companies";
 import { kpiDefinition, kpiValue } from "@ai-company/db/schema/metrics";
 import { env } from "@ai-company/env/server";
-import { createPredictionService, type CompanyContext } from "@ai-company/ai";
+import {
+  createPredictionService,
+  createProvider,
+  getDefaultModel,
+  type CompanyContext,
+} from "@ai-company/ai";
 
 async function checkCompanyAccess(userId: string, companyId: string) {
   const membership = await db.query.companyMember.findFirst({
@@ -28,14 +33,24 @@ async function checkCompanyAccess(userId: string, companyId: string) {
 }
 
 function getPredictionService() {
-  if (!env.ANTHROPIC_API_KEY) {
+  const providerName = env.AI_PROVIDER;
+  const keyMap: Record<string, string | undefined> = {
+    gemini: env.GOOGLE_AI_API_KEY,
+    openai: env.OPENAI_API_KEY,
+    anthropic: env.ANTHROPIC_API_KEY,
+  };
+
+  const apiKey = keyMap[providerName];
+  if (!apiKey) {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
-      message: "Prediction service not configured. Please set ANTHROPIC_API_KEY.",
+      message: `Prediction service not configured. Set the API key for the "${providerName}" provider.`,
     });
   }
 
-  return createPredictionService(env.ANTHROPIC_API_KEY);
+  const provider = createProvider(providerName, apiKey);
+  const model = getDefaultModel(providerName);
+  return createPredictionService(provider, model);
 }
 
 export const predictionsRouter = router({

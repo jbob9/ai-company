@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
@@ -6,7 +6,6 @@ import { trpc, trpcClient } from "@/utils/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { toast } from "sonner";
 
 export default function SettingsPage() {
@@ -19,10 +18,19 @@ export default function SettingsPage() {
     enabled: !!companyId,
   });
 
-  const [name, setName] = useState(company?.name || "");
-  const [stage, setStage] = useState(company?.stage || "bootstrap");
-  const [industry, setIndustry] = useState(company?.industry || "");
-  const [employeeCount, setEmployeeCount] = useState(String(company?.employeeCount || ""));
+  const [name, setName] = useState("");
+  const [stage, setStage] = useState("bootstrap");
+  const [industry, setIndustry] = useState("");
+  const [employeeCount, setEmployeeCount] = useState("");
+
+  useEffect(() => {
+    if (company) {
+      setName(company.name || "");
+      setStage(company.stage || "bootstrap");
+      setIndustry(company.industry || "");
+      setEmployeeCount(String(company.employeeCount || ""));
+    }
+  }, [company]);
 
   const updateCompany = useMutation({
     mutationFn: () =>
@@ -37,9 +45,7 @@ export default function SettingsPage() {
       queryClient.invalidateQueries({ queryKey: ["company"] });
       toast.success("Settings saved");
     },
-    onError: (error) => {
-      toast.error(error.message);
-    },
+    onError: (error) => toast.error(error.message),
   });
 
   const deleteCompany = useMutation({
@@ -49,9 +55,7 @@ export default function SettingsPage() {
       toast.success("Company deleted");
       navigate("/dashboard");
     },
-    onError: (error) => {
-      toast.error(error.message);
-    },
+    onError: (error) => toast.error(error.message),
   });
 
   const initDepartments = useMutation({
@@ -64,95 +68,111 @@ export default function SettingsPage() {
       queryClient.invalidateQueries({ queryKey: ["department"] });
       toast.success("Departments initialized");
     },
-    onError: (error) => {
-      toast.error(error.message);
-    },
+    onError: (error) => toast.error(error.message),
   });
 
-  if (!companyId) return <div>No company selected</div>;
+  if (!companyId) return null;
 
   return (
-    <div className="space-y-6 max-w-2xl">
-      <div>
-        <h1 className="text-2xl font-bold">Settings</h1>
-        <p className="text-muted-foreground">Manage your company settings</p>
+    <div className="max-w-lg mx-auto">
+      <div className="mb-6">
+        <h1 className="text-xl font-semibold">Settings</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">Manage company configuration</p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Company Information</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="name">Company Name</Label>
-            <Input
-              id="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
+      <div className="space-y-6">
+        <div className="glass-panel rounded-xl p-5 space-y-4">
+          <h2 className="text-[13px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Company Info
+          </h2>
+          <div className="space-y-3">
+            <div>
+              <Label htmlFor="name" className="text-[12px]">
+                Name
+              </Label>
+              <Input
+                id="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="mt-1 glass-input rounded-lg border-0 h-9 text-[13px]"
+              />
+            </div>
+            <div>
+              <Label htmlFor="stage" className="text-[12px]">
+                Stage
+              </Label>
+              <select
+                id="stage"
+                value={stage}
+                onChange={(e) => setStage(e.target.value)}
+                className="w-full mt-1 glass-input rounded-lg h-9 px-3 text-[13px] focus:outline-none focus:ring-1 focus:ring-primary/30"
+              >
+                <option value="bootstrap">Bootstrap</option>
+                <option value="early">Early Stage</option>
+                <option value="growth">Growth Stage</option>
+                <option value="scale">Scale Stage</option>
+              </select>
+            </div>
+            <div>
+              <Label htmlFor="industry" className="text-[12px]">
+                Industry
+              </Label>
+              <Input
+                id="industry"
+                value={industry}
+                onChange={(e) => setIndustry(e.target.value)}
+                className="mt-1 glass-input rounded-lg border-0 h-9 text-[13px]"
+              />
+            </div>
+            <div>
+              <Label htmlFor="employees" className="text-[12px]">
+                Employees
+              </Label>
+              <Input
+                id="employees"
+                type="number"
+                value={employeeCount}
+                onChange={(e) => setEmployeeCount(e.target.value)}
+                className="mt-1 glass-input rounded-lg border-0 h-9 text-[13px]"
+              />
+            </div>
           </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="stage">Company Stage</Label>
-            <select
-              id="stage"
-              value={stage}
-              onChange={(e) => setStage(e.target.value)}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            >
-              <option value="bootstrap">Bootstrap</option>
-              <option value="early">Early Stage</option>
-              <option value="growth">Growth Stage</option>
-              <option value="scale">Scale Stage</option>
-            </select>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="industry">Industry</Label>
-            <Input
-              id="industry"
-              value={industry}
-              onChange={(e) => setIndustry(e.target.value)}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="employees">Employee Count</Label>
-            <Input
-              id="employees"
-              type="number"
-              value={employeeCount}
-              onChange={(e) => setEmployeeCount(e.target.value)}
-            />
-          </div>
-
-          <Button onClick={() => updateCompany.mutate()} disabled={updateCompany.isPending}>
+          <Button
+            size="sm"
+            className="rounded-xl"
+            onClick={() => updateCompany.mutate()}
+            disabled={updateCompany.isPending}
+          >
             {updateCompany.isPending ? "Saving..." : "Save Changes"}
           </Button>
-        </CardContent>
-      </Card>
+        </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Initialize Departments</CardTitle>
-          <CardDescription>
-            Create default departments based on your company stage
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button onClick={() => initDepartments.mutate()} disabled={initDepartments.isPending}>
+        <div className="glass-panel rounded-xl p-5 space-y-3">
+          <h2 className="text-[13px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Quick Setup
+          </h2>
+          <p className="text-[12px] text-muted-foreground">
+            Create default departments for your company stage
+          </p>
+          <Button
+            size="sm"
+            variant="outline"
+            className="rounded-xl"
+            onClick={() => initDepartments.mutate()}
+            disabled={initDepartments.isPending}
+          >
             {initDepartments.isPending ? "Initializing..." : "Initialize Departments"}
           </Button>
-        </CardContent>
-      </Card>
+        </div>
 
-      <Card className="border-red-500/50">
-        <CardHeader>
-          <CardTitle className="text-red-500">Danger Zone</CardTitle>
-        </CardHeader>
-        <CardContent>
+        <div className="glass-panel rounded-xl p-5 space-y-3 border-red-500/20">
+          <h2 className="text-[13px] font-semibold uppercase tracking-wider text-red-500/80">
+            Danger Zone
+          </h2>
           <Button
+            size="sm"
             variant="destructive"
+            className="rounded-xl"
             onClick={() => {
               if (confirm("Are you sure? This action cannot be undone.")) {
                 deleteCompany.mutate();
@@ -162,8 +182,8 @@ export default function SettingsPage() {
           >
             {deleteCompany.isPending ? "Deleting..." : "Delete Company"}
           </Button>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

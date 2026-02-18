@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import type { AIProvider } from "../providers/types";
 import type { MetricData, CompanyContext } from "../types";
 
 export interface PredictionResult {
@@ -28,29 +28,45 @@ export interface RevenueForecast {
 }
 
 export class PredictionService {
-  private client: Anthropic;
+  private provider: AIProvider;
+  private model: string;
 
-  constructor(apiKey: string) {
-    this.client = new Anthropic({ apiKey });
+  constructor(provider: AIProvider, model: string) {
+    this.provider = provider;
+    this.model = model;
+  }
+
+  private async ask<T>(prompt: string, maxTokens = 1024): Promise<T | null> {
+    const result = await this.provider.chat({
+      model: this.model,
+      messages: [{ role: "user", content: prompt }],
+      maxTokens,
+    });
+
+    const jsonMatch = result.content.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return null;
+    try {
+      return JSON.parse(jsonMatch[0]) as T;
+    } catch {
+      return null;
+    }
   }
 
   async predictMetric(
     metricHistory: MetricData[],
     forecastPeriods: number = 3
   ): Promise<PredictionResult[]> {
-    if (metricHistory.length < 3) {
-      return [];
-    }
+    if (metricHistory.length < 3) return [];
 
-    const sortedHistory = [...metricHistory].sort(
+    const sorted = [...metricHistory].sort(
       (a, b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime()
     );
 
     const prompt = `Analyze this metric history and predict future values:
 
-Metric: ${sortedHistory[0].name}
+Metric: ${sorted[0].name}
 History (oldest to newest):
-${sortedHistory.map((m) => `- ${new Date(m.recordedAt).toLocaleDateString()}: ${m.value}${m.unit ? " " + m.unit : ""}`).join("\n")}
+${sorted.map((m) => `- ${new Date(m.recordedAt).toLocaleDateString()}: ${m.value}${m.unit ? " " + m.unit : ""}`).join("\n")}
 
 Predict the next ${forecastPeriods} periods. Provide your response as JSON:
 {
@@ -65,32 +81,27 @@ Predict the next ${forecastPeriods} periods. Provide your response as JSON:
   "factors": ["key factor 1", "key factor 2"]
 }`;
 
-    const response = await this.client.messages.create({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 1024,
-      messages: [{ role: "user", content: prompt }],
-    });
+    const data = await this.ask<{
+      predictions: Array<{
+        period: string;
+        predictedValue: number;
+        confidence: number;
+        reasoning: string;
+      }>;
+      factors: string[];
+    }>(prompt);
 
-    const textContent = response.content.find((c) => c.type === "text");
-    const content = textContent?.type === "text" ? textContent.text : "";
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (!data) return [];
 
-    if (!jsonMatch) return [];
-
-    try {
-      const data = JSON.parse(jsonMatch[0]);
-      return data.predictions.map((p: Record<string, unknown>) => ({
-        metric: sortedHistory[0].name,
-        currentValue: sortedHistory[sortedHistory.length - 1].value,
-        predictedValue: p.predictedValue as number,
-        confidence: p.confidence as number,
-        timeframe: p.period as string,
-        reasoning: p.reasoning as string,
-        factors: data.factors,
-      }));
-    } catch {
-      return [];
-    }
+    return data.predictions.map((p) => ({
+      metric: sorted[0].name,
+      currentValue: sorted[sorted.length - 1].value,
+      predictedValue: p.predictedValue,
+      confidence: p.confidence,
+      timeframe: p.period,
+      reasoning: p.reasoning,
+      factors: data.factors,
+    }));
   }
 
   async predictChurn(
@@ -119,29 +130,9 @@ Provide churn prediction as JSON:
   "recommendedActions": ["action 1", "action 2"]
 }`;
 
-      const response = await this.client.messages.create({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 512,
-        messages: [{ role: "user", content: prompt }],
-      });
-
-      const textContent = response.content.find((c) => c.type === "text");
-      const content = textContent?.type === "text" ? textContent.text : "";
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-
-      if (jsonMatch) {
-        try {
-          const data = JSON.parse(jsonMatch[0]);
-          predictions.push({
-            customerId: customer.customerId,
-            riskScore: data.riskScore,
-            riskLevel: data.riskLevel,
-            signals: data.signals,
-            recommendedActions: data.recommendedActions,
-          });
-        } catch {
-          // Skip this customer if parsing fails
-        }
+      const data = await this.ask<ChurnPrediction>(prompt, 512);
+      if (data) {
+        predictions.push({ ...data, customerId: customer.customerId });
       }
     }
 
@@ -177,30 +168,25 @@ Provide forecast as JSON:
   "assumptions": ["assumption 1", "assumption 2"]
 }`;
 
-    const response = await this.client.messages.create({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 1024,
-      messages: [{ role: "user", content: prompt }],
-    });
+    const data = await this.ask<{
+      forecasts: Array<{
+        period: string;
+        predictedRevenue: number;
+        confidence: number;
+        growthRate: number;
+      }>;
+      assumptions: string[];
+    }>(prompt);
 
-    const textContent = response.content.find((c) => c.type === "text");
-    const content = textContent?.type === "text" ? textContent.text : "";
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (!data) return [];
 
-    if (!jsonMatch) return [];
-
-    try {
-      const data = JSON.parse(jsonMatch[0]);
-      return data.forecasts.map((f: Record<string, unknown>) => ({
-        period: f.period as string,
-        predictedRevenue: f.predictedRevenue as number,
-        confidence: f.confidence as number,
-        growthRate: f.growthRate as number,
-        assumptions: data.assumptions,
-      }));
-    } catch {
-      return [];
-    }
+    return data.forecasts.map((f) => ({
+      period: f.period,
+      predictedRevenue: f.predictedRevenue,
+      confidence: f.confidence,
+      growthRate: f.growthRate,
+      assumptions: data.assumptions,
+    }));
   }
 
   async predictDealProbability(
@@ -236,38 +222,22 @@ Provide prediction as JSON:
   "recommendedActions": ["action 1", "action 2"]
 }`;
 
-    const response = await this.client.messages.create({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 512,
-      messages: [{ role: "user", content: prompt }],
-    });
+    const data = await this.ask<{
+      probability: number;
+      confidence: number;
+      factors: Array<{ factor: string; impact: "positive" | "negative" | "neutral" }>;
+      recommendedActions: string[];
+    }>(prompt, 512);
 
-    const textContent = response.content.find((c) => c.type === "text");
-    const content = textContent?.type === "text" ? textContent.text : "";
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-
-    if (!jsonMatch) {
-      return {
-        probability: 50,
-        confidence: 0,
-        factors: [],
-        recommendedActions: [],
-      };
-    }
-
-    try {
-      return JSON.parse(jsonMatch[0]);
-    } catch {
-      return {
-        probability: 50,
-        confidence: 0,
-        factors: [],
-        recommendedActions: [],
-      };
-    }
+    return data ?? {
+      probability: 50,
+      confidence: 0,
+      factors: [],
+      recommendedActions: [],
+    };
   }
 }
 
-export function createPredictionService(apiKey: string): PredictionService {
-  return new PredictionService(apiKey);
+export function createPredictionService(provider: AIProvider, model: string): PredictionService {
+  return new PredictionService(provider, model);
 }

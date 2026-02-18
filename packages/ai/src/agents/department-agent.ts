@@ -1,4 +1,5 @@
 import { BaseAgent } from "./base-agent";
+import type { AIProvider } from "../providers/types";
 import {
   getDepartmentSystemPrompt,
   getAnalysisPrompt,
@@ -10,7 +11,6 @@ import type {
   DepartmentContext,
   CompanyContext,
   MetricData,
-  Message,
   AgentConfig,
   DepartmentAnalysis,
   Recommendation,
@@ -22,40 +22,28 @@ export class DepartmentAgent extends BaseAgent {
   private metrics: MetricData[];
 
   constructor(
-    apiKey: string,
+    provider: AIProvider,
+    agentConfig: Required<AgentConfig>,
     context: DepartmentContext,
     metrics: MetricData[] = [],
-    config?: AgentConfig
   ) {
-    super(apiKey, config);
+    super(provider, agentConfig);
     this.context = context;
     this.metrics = metrics;
   }
 
-  /**
-   * Update the agent's context
-   */
   updateContext(context: Partial<DepartmentContext>): void {
     this.context = { ...this.context, ...context };
   }
 
-  /**
-   * Update the agent's metrics
-   */
   updateMetrics(metrics: MetricData[]): void {
     this.metrics = metrics;
   }
 
-  /**
-   * Get the department type
-   */
   get departmentType(): DepartmentType {
     return this.context.departmentType;
   }
 
-  /**
-   * Get the department display name
-   */
   get departmentName(): string {
     return departmentNames[this.context.departmentType];
   }
@@ -64,9 +52,6 @@ export class DepartmentAgent extends BaseAgent {
     return getDepartmentSystemPrompt(this.context, this.metrics);
   }
 
-  /**
-   * Analyze current metrics and return insights
-   */
   async analyze(): Promise<{
     analysis: DepartmentAnalysis;
     metadata: { inputTokens: number; outputTokens: number; responseTimeMs: number };
@@ -100,9 +85,6 @@ export class DepartmentAgent extends BaseAgent {
     };
   }
 
-  /**
-   * Generate recommendations based on analysis
-   */
   async generateRecommendations(
     companyContext: CompanyContext,
     analysisResult?: DepartmentAnalysis
@@ -110,7 +92,6 @@ export class DepartmentAgent extends BaseAgent {
     recommendations: Recommendation[];
     metadata: { inputTokens: number; outputTokens: number; responseTimeMs: number };
   }> {
-    // If no analysis provided, run one first
     let analysis: DepartmentAnalysis;
     if (analysisResult) {
       analysis = analysisResult;
@@ -135,9 +116,6 @@ export class DepartmentAgent extends BaseAgent {
     };
   }
 
-  /**
-   * Check metrics against thresholds and generate alerts
-   */
   async checkAlerts(thresholds: Record<string, {
     criticalMin?: number;
     criticalMax?: number;
@@ -157,16 +135,13 @@ export class DepartmentAgent extends BaseAgent {
       let severity: GeneratedAlert["severity"] | null = null;
       let thresholdValue: string | undefined;
 
-      // Check critical thresholds
       if (threshold.criticalMin !== undefined && metric.value < threshold.criticalMin) {
         severity = "critical";
         thresholdValue = `min: ${threshold.criticalMin}`;
       } else if (threshold.criticalMax !== undefined && metric.value > threshold.criticalMax) {
         severity = "critical";
         thresholdValue = `max: ${threshold.criticalMax}`;
-      }
-      // Check warning thresholds
-      else if (threshold.warningMin !== undefined && metric.value < threshold.warningMin) {
+      } else if (threshold.warningMin !== undefined && metric.value < threshold.warningMin) {
         severity = "warning";
         thresholdValue = `min: ${threshold.warningMin}`;
       } else if (threshold.warningMax !== undefined && metric.value > threshold.warningMax) {
@@ -175,7 +150,6 @@ export class DepartmentAgent extends BaseAgent {
       }
 
       if (severity) {
-        // Generate AI insight for the alert
         const insightPrompt = `The metric "${metric.name}" has triggered a ${severity} alert.
 Current value: ${metric.value}${metric.unit ? ` ${metric.unit}` : ""}
 Threshold: ${thresholdValue}
@@ -206,7 +180,6 @@ Format as JSON: { "insight": "...", "recommendation": "..." }`;
             thresholdValue,
           });
         } catch {
-          // If AI insight fails, still create the alert without AI content
           alerts.push({
             severity,
             departmentType: this.context.departmentType,
@@ -223,14 +196,11 @@ Format as JSON: { "insight": "...", "recommendation": "..." }`;
   }
 }
 
-/**
- * Factory function to create a department agent
- */
 export function createDepartmentAgent(
-  apiKey: string,
+  provider: AIProvider,
+  agentConfig: Required<AgentConfig>,
   context: DepartmentContext,
   metrics?: MetricData[],
-  config?: AgentConfig
 ): DepartmentAgent {
-  return new DepartmentAgent(apiKey, context, metrics, config);
+  return new DepartmentAgent(provider, agentConfig, context, metrics);
 }
