@@ -1,8 +1,7 @@
 import type {
-  DepartmentType,
-  CompanyStage,
-  DepartmentContext,
   CompanyContext,
+  DepartmentContext,
+  DepartmentType,
   MetricData,
 } from "../types";
 
@@ -105,7 +104,7 @@ export const departmentNames: Record<DepartmentType, string> = {
 // Generate department agent system prompt
 export function getDepartmentSystemPrompt(
   context: DepartmentContext,
-  metrics?: MetricData[]
+  metrics?: MetricData[],
 ): string {
   const deptName = departmentNames[context.departmentType];
   const kpis = departmentKPIs[context.departmentType];
@@ -131,7 +130,7 @@ ${context.goals?.length ? `- Key Goals: ${context.goals.join(", ")}` : ""}
 ${metrics
   .map(
     (m) =>
-      `- ${m.name}: ${m.value}${m.unit ? ` ${m.unit}` : ""} (${m.trend === "up" ? "↑" : m.trend === "down" ? "↓" : "→"}${m.changePercent ? ` ${m.changePercent > 0 ? "+" : ""}${m.changePercent.toFixed(1)}%` : ""})`
+      `- ${m.name}: ${m.value}${m.unit ? ` ${m.unit}` : ""} (${m.trend === "up" ? "↑" : m.trend === "down" ? "↓" : "→"}${m.changePercent ? ` ${m.changePercent > 0 ? "+" : ""}${m.changePercent.toFixed(1)}%` : ""})`,
   )
   .join("\n")}
 
@@ -182,7 +181,7 @@ When responding:
 // Generate orchestration AI system prompt
 export function getOrchestrationSystemPrompt(
   context: CompanyContext,
-  departmentSummaries?: Record<DepartmentType, string>
+  departmentSummaries?: Record<DepartmentType, string>,
 ): string {
   let prompt = `You are the Orchestration AI for ${context.name}, acting as a strategic advisor with visibility across all departments.
 
@@ -208,7 +207,10 @@ ${context.objectives?.length ? `- Key Objectives: ${context.objectives.join(", "
   if (departmentSummaries && Object.keys(departmentSummaries).length > 0) {
     prompt += `DEPARTMENT SUMMARIES:
 ${Object.entries(departmentSummaries)
-  .map(([dept, summary]) => `${departmentNames[dept as DepartmentType]}:\n${summary}`)
+  .map(
+    ([dept, summary]) =>
+      `${departmentNames[dept as DepartmentType]}:\n${summary}`,
+  )
   .join("\n\n")}
 
 `;
@@ -280,7 +282,7 @@ Provide your analysis in the following JSON format:
 export function getRecommendationPrompt(
   departmentType: DepartmentType,
   analysis: string,
-  companyContext: CompanyContext
+  companyContext: CompanyContext,
 ): string {
   return `Based on the following analysis for the ${departmentNames[departmentType]} department, generate actionable recommendations:
 

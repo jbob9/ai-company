@@ -1,32 +1,35 @@
-import { z } from "zod";
-import { eq, and, desc, lt } from "drizzle-orm";
-import { nanoid } from "nanoid";
 import { TRPCError } from "@trpc/server";
+import { and, desc, eq, lt } from "drizzle-orm";
+import { nanoid } from "nanoid";
+import { z } from "zod";
 
-import { protectedProcedure, router } from "../index";
+import {
+  createAIService,
+  type CompanyContext,
+  type DepartmentContext,
+  type MetricData,
+} from "@ai-company/ai";
 import { db } from "@ai-company/db";
 import { company, companyMember } from "@ai-company/db/schema/companies";
-import { department, departmentDocument, departmentTypeEnum } from "@ai-company/db/schema/departments";
-import { kpiDefinition, kpiValue } from "@ai-company/db/schema/metrics";
 import {
   aiConversation,
   aiMessage,
-  type ConversationContext,
   type AIMessageMetadata,
 } from "@ai-company/db/schema/conversations";
-import { env } from "@ai-company/env/server";
 import {
-  createAIService,
-  type DepartmentContext,
-  type CompanyContext,
-  type MetricData,
-} from "@ai-company/ai";
+  department,
+  departmentDocument,
+  departmentTypeEnum,
+} from "@ai-company/db/schema/departments";
+import { kpiDefinition, kpiValue } from "@ai-company/db/schema/metrics";
+import { env } from "@ai-company/env/server";
+import { protectedProcedure, router } from "../index";
 
 async function checkCompanyAccess(userId: string, companyId: string) {
   const membership = await db.query.companyMember.findFirst({
     where: and(
       eq(companyMember.companyId, companyId),
-      eq(companyMember.userId, userId)
+      eq(companyMember.userId, userId),
     ),
   });
 
@@ -90,7 +93,7 @@ async function getCompanyContext(companyId: string): Promise<CompanyContext> {
 
 async function getDepartmentContext(
   companyId: string,
-  departmentType: typeof departmentTypeEnum.enumValues[number]
+  departmentType: (typeof departmentTypeEnum.enumValues)[number],
 ): Promise<DepartmentContext> {
   const comp = await db.query.company.findFirst({
     where: eq(company.id, companyId),
@@ -106,7 +109,7 @@ async function getDepartmentContext(
   const dept = await db.query.department.findFirst({
     where: and(
       eq(department.companyId, companyId),
-      eq(department.type, departmentType)
+      eq(department.type, departmentType),
     ),
   });
 
@@ -118,7 +121,11 @@ async function getDepartmentContext(
     });
     documents = docs
       .filter((d) => d.content.trim().length > 0)
-      .map((d) => ({ category: d.category, title: d.title, content: d.content }));
+      .map((d) => ({
+        category: d.category,
+        title: d.title,
+        content: d.content,
+      }));
   }
 
   return {
@@ -134,12 +141,12 @@ async function getDepartmentContext(
 
 async function getDepartmentMetrics(
   companyId: string,
-  departmentType: typeof departmentTypeEnum.enumValues[number]
+  departmentType: (typeof departmentTypeEnum.enumValues)[number],
 ): Promise<MetricData[]> {
   const definitions = await db.query.kpiDefinition.findMany({
     where: and(
       eq(kpiDefinition.companyId, companyId),
-      eq(kpiDefinition.departmentType, departmentType)
+      eq(kpiDefinition.departmentType, departmentType),
     ),
     with: {
       values: {
@@ -185,7 +192,7 @@ export const aiRouter = router({
         departmentType: z.enum(departmentTypeEnum.enumValues).optional(),
         conversationId: z.string().optional(),
         message: z.string().min(1).max(10000),
-      })
+      }),
     )
     .mutation(async ({ ctx, input }) => {
       await checkCompanyAccess(ctx.session.user.id, input.companyId);
@@ -238,24 +245,24 @@ export const aiRouter = router({
       if (input.departmentType) {
         const deptContext = await getDepartmentContext(
           input.companyId,
-          input.departmentType
+          input.departmentType,
         );
         const metrics = await getDepartmentMetrics(
           input.companyId,
-          input.departmentType
+          input.departmentType,
         );
 
         const agent = aiService.getDepartmentAgent(
           input.companyId,
           deptContext,
-          metrics
+          metrics,
         );
         response = await agent.chat(input.message, history);
       } else {
         const companyContext = await getCompanyContext(input.companyId);
         const orchestrator = aiService.getOrchestrationAgent(
           input.companyId,
-          companyContext
+          companyContext,
         );
         response = await orchestrator.chat(input.message, history);
       }
@@ -285,7 +292,7 @@ export const aiRouter = router({
       z.object({
         companyId: z.string(),
         departmentType: z.enum(departmentTypeEnum.enumValues),
-      })
+      }),
     )
     .mutation(async ({ ctx, input }) => {
       await checkCompanyAccess(ctx.session.user.id, input.companyId);
@@ -294,17 +301,17 @@ export const aiRouter = router({
 
       const deptContext = await getDepartmentContext(
         input.companyId,
-        input.departmentType
+        input.departmentType,
       );
       const metrics = await getDepartmentMetrics(
         input.companyId,
-        input.departmentType
+        input.departmentType,
       );
 
       const analysis = await aiService.analyzeDepartment(
         input.companyId,
         deptContext,
-        metrics
+        metrics,
       );
 
       return analysis;
@@ -321,7 +328,7 @@ export const aiRouter = router({
       const departments = await db.query.department.findMany({
         where: and(
           eq(department.companyId, input.companyId),
-          eq(department.aiEnabled, true)
+          eq(department.aiEnabled, true),
         ),
       });
 
@@ -329,17 +336,20 @@ export const aiRouter = router({
         departments.map(async (dept) => {
           const deptContext = await getDepartmentContext(
             input.companyId,
-            dept.type
+            dept.type,
           );
-          const metrics = await getDepartmentMetrics(input.companyId, dept.type);
+          const metrics = await getDepartmentMetrics(
+            input.companyId,
+            dept.type,
+          );
           return { context: deptContext, metrics };
-        })
+        }),
       );
 
       const result = await aiService.analyzeCompany(
         input.companyId,
         companyContext,
-        departmentData
+        departmentData,
       );
 
       return result;
@@ -350,7 +360,7 @@ export const aiRouter = router({
       z.object({
         companyId: z.string(),
         departmentType: z.enum(departmentTypeEnum.enumValues).optional(),
-      })
+      }),
     )
     .mutation(async ({ ctx, input }) => {
       await checkCompanyAccess(ctx.session.user.id, input.companyId);
@@ -361,24 +371,24 @@ export const aiRouter = router({
       if (input.departmentType) {
         const deptContext = await getDepartmentContext(
           input.companyId,
-          input.departmentType
+          input.departmentType,
         );
         const metrics = await getDepartmentMetrics(
           input.companyId,
-          input.departmentType
+          input.departmentType,
         );
 
         return aiService.getDepartmentRecommendations(
           input.companyId,
           deptContext,
           companyContext,
-          metrics
+          metrics,
         );
       } else {
         const departments = await db.query.department.findMany({
           where: and(
             eq(department.companyId, input.companyId),
-            eq(department.aiEnabled, true)
+            eq(department.aiEnabled, true),
           ),
         });
 
@@ -386,24 +396,24 @@ export const aiRouter = router({
           departments.map(async (dept) => {
             const deptContext = await getDepartmentContext(
               input.companyId,
-              dept.type
+              dept.type,
             );
             const metrics = await getDepartmentMetrics(
               input.companyId,
-              dept.type
+              dept.type,
             );
             return aiService.analyzeDepartment(
               input.companyId,
               deptContext,
-              metrics
+              metrics,
             );
-          })
+          }),
         );
 
         return aiService.getCompanyRecommendations(
           input.companyId,
           companyContext,
-          departmentAnalyses
+          departmentAnalyses,
         );
       }
     }),
@@ -414,7 +424,7 @@ export const aiRouter = router({
         companyId: z.string(),
         departmentType: z.enum(departmentTypeEnum.enumValues).optional(),
         limit: z.number().int().min(1).max(50).optional(),
-      })
+      }),
     )
     .query(async ({ ctx, input }) => {
       await checkCompanyAccess(ctx.session.user.id, input.companyId);
@@ -425,7 +435,9 @@ export const aiRouter = router({
       ];
 
       if (input.departmentType) {
-        conditions.push(eq(aiConversation.departmentType, input.departmentType));
+        conditions.push(
+          eq(aiConversation.departmentType, input.departmentType),
+        );
       }
 
       return db.query.aiConversation.findMany({
@@ -475,7 +487,7 @@ export const aiRouter = router({
         conversationId: z.string(),
         limit: z.number().int().min(1).max(50).default(20),
         before: z.string().datetime().optional(), // ISO date: fetch messages older than this (for "load more" at top)
-      })
+      }),
     )
     .query(async ({ ctx, input }) => {
       const conversation = await db.query.aiConversation.findFirst({
@@ -518,7 +530,7 @@ export const aiRouter = router({
       z.object({
         id: z.string(),
         title: z.string().min(1).max(200).optional(),
-      })
+      }),
     )
     .mutation(async ({ ctx, input }) => {
       const conversation = await db.query.aiConversation.findFirst({

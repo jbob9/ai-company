@@ -64,7 +64,7 @@ export class PredictionService {
 
     const prompt = `Analyze this metric history and predict future values:
 
-Metric: ${sorted[0].name}
+Metric: ${sorted[0]?.name}
 History (oldest to newest):
 ${sorted.map((m) => `- ${new Date(m.recordedAt).toLocaleDateString()}: ${m.value}${m.unit ? " " + m.unit : ""}`).join("\n")}
 
@@ -94,8 +94,8 @@ Predict the next ${forecastPeriods} periods. Provide your response as JSON:
     if (!data) return [];
 
     return data.predictions.map((p) => ({
-      metric: sorted[0].name,
-      currentValue: sorted[sorted.length - 1].value,
+      metric: sorted[0]?.name ?? "",
+      currentValue: sorted[sorted.length - 1]?.value ?? 0,
       predictedValue: p.predictedValue,
       confidence: p.confidence,
       timeframe: p.period,

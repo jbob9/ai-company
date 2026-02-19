@@ -69,10 +69,10 @@ export class LearningService {
           successful: 0,
         };
       }
-      byType[outcome.type].total++;
-      if (outcome.accepted) byType[outcome.type].accepted++;
-      if (outcome.implemented) byType[outcome.type].implemented++;
-      if (outcome.outcome?.success) byType[outcome.type].successful++;
+      byType[outcome.type]!.total++;
+      if (outcome.accepted) byType[outcome.type]!.accepted++;
+      if (outcome.implemented) byType[outcome.type]!.implemented++;
+      if (outcome.outcome?.success) byType[outcome.type]!.successful++;
     }
 
     const patterns: string[] = [];

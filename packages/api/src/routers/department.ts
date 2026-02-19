@@ -61,7 +61,7 @@ const createDepartmentInput = z.object({
   context: z.string().max(2000).optional(),
   aiConfig: z
     .object({
-      alertThresholds: z.record(z.number()).optional(),
+      alertThresholds: z.record(z.number(), z.number()).optional(),
       customInstructions: z.string().optional(),
       notifyOnCritical: z.boolean().optional(),
       notifyOnWarning: z.boolean().optional(),
@@ -79,7 +79,7 @@ const updateDepartmentInput = z.object({
   context: z.string().max(2000).optional(),
   aiConfig: z
     .object({
-      alertThresholds: z.record(z.number()).optional(),
+      alertThresholds: z.record(z.number(), z.number()).optional(),
       customInstructions: z.string().optional(),
       notifyOnCritical: z.boolean().optional(),
       notifyOnWarning: z.boolean().optional(),
@@ -332,8 +332,8 @@ export const departmentRouter = router({
       const existingTypes = new Set(existing.map((d) => d.type));
 
       // Create missing departments
-      const toCreate = deptTypes.filter((type) => !existingTypes.has(type));
-
+      const toCreate = deptTypes?.filter((type) => !existingTypes.has(type)) ?? [];
+      console.log("toCreate", toCreate);
       if (toCreate.length > 0) {
         const newDepts = toCreate.map((type) => ({
           id: nanoid(),
