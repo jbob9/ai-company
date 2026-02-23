@@ -1,6 +1,5 @@
-import type { AIProvider } from "./providers/types";
-import { DEFAULT_MODELS } from "./providers/types";
-import { createProvider } from "./providers/registry";
+import type { LanguageModel } from "ai";
+import { getModel } from "./providers/model";
 import { DepartmentAgent, createDepartmentAgent } from "./agents/department-agent";
 import {
   OrchestrationAgent,
@@ -26,44 +25,40 @@ export interface AIServiceConfig {
 }
 
 export class AIService {
-  private aiProvider: AIProvider;
+  private languageModel: LanguageModel;
   private resolvedConfig: Required<AgentConfig>;
   private departmentAgents: Map<string, DepartmentAgent> = new Map();
   private orchestrationAgent: OrchestrationAgent | null = null;
 
   constructor(config: AIServiceConfig) {
-    this.aiProvider = createProvider(config.provider, config.apiKey);
-
-    const defaultModel = config.defaultModel ?? DEFAULT_MODELS[config.provider] ?? "default";
+    this.languageModel = getModel(
+      config.provider,
+      config.apiKey,
+      config.defaultModel,
+    );
 
     this.resolvedConfig = {
-      model: config.defaultAgentConfig?.model ?? defaultModel,
+      model: config.defaultModel ?? config.provider,
       maxTokens: config.defaultAgentConfig?.maxTokens ?? 4096,
       temperature: config.defaultAgentConfig?.temperature ?? 0.7,
     };
   }
 
-  /** Expose the underlying provider for PredictionService / LearningService */
-  get provider(): AIProvider {
-    return this.aiProvider;
-  }
-
-  /** Expose the resolved model name */
-  get model(): string {
-    return this.resolvedConfig.model;
+  get model(): LanguageModel {
+    return this.languageModel;
   }
 
   getDepartmentAgent(
     companyId: string,
     context: DepartmentContext,
-    metrics?: MetricData[]
+    metrics?: MetricData[],
   ): DepartmentAgent {
     const key = `${companyId}:${context.departmentType}`;
 
     let agent = this.departmentAgents.get(key);
     if (!agent) {
       agent = createDepartmentAgent(
-        this.aiProvider,
+        this.languageModel,
         this.resolvedConfig,
         context,
         metrics,
@@ -78,13 +73,13 @@ export class AIService {
   }
 
   getOrchestrationAgent(
-    companyId: string,
+    _companyId: string,
     context: CompanyContext,
-    departmentSummaries?: Record<DepartmentType, string>
+    departmentSummaries?: Record<DepartmentType, string>,
   ): OrchestrationAgent {
     if (!this.orchestrationAgent) {
       this.orchestrationAgent = createOrchestrationAgent(
-        this.aiProvider,
+        this.languageModel,
         this.resolvedConfig,
         context,
         departmentSummaries,
@@ -102,7 +97,7 @@ export class AIService {
   async analyzeDepartment(
     companyId: string,
     context: DepartmentContext,
-    metrics: MetricData[]
+    metrics: MetricData[],
   ): Promise<DepartmentAnalysis> {
     const agent = this.getDepartmentAgent(companyId, context, metrics);
     const { analysis } = await agent.analyze();
@@ -115,7 +110,7 @@ export class AIService {
     departmentData: Array<{
       context: DepartmentContext;
       metrics: MetricData[];
-    }>
+    }>,
   ): Promise<{
     departmentAnalyses: DepartmentAnalysis[];
     companyAnalysis: CompanyAnalysis;
@@ -123,7 +118,7 @@ export class AIService {
     const departmentAnalyses = await Promise.all(
       departmentData.map(async ({ context, metrics }) => {
         return this.analyzeDepartment(companyId, context, metrics);
-      })
+      }),
     );
 
     const departmentSummaries = departmentAnalyses.reduce(
@@ -131,13 +126,13 @@ export class AIService {
         acc[analysis.departmentType] = analysis.summary;
         return acc;
       },
-      {} as Record<DepartmentType, string>
+      {} as Record<DepartmentType, string>,
     );
 
     const orchestrator = this.getOrchestrationAgent(
       companyId,
       companyContext,
-      departmentSummaries
+      departmentSummaries,
     );
     const { analysis: companyAnalysis } = await orchestrator.synthesize(departmentAnalyses);
 
@@ -148,7 +143,7 @@ export class AIService {
     companyId: string,
     departmentContext: DepartmentContext,
     companyContext: CompanyContext,
-    metrics: MetricData[]
+    metrics: MetricData[],
   ): Promise<Recommendation[]> {
     const agent = this.getDepartmentAgent(companyId, departmentContext, metrics);
     const { recommendations } = await agent.generateRecommendations(companyContext);
@@ -158,11 +153,11 @@ export class AIService {
   async getCompanyRecommendations(
     companyId: string,
     companyContext: CompanyContext,
-    departmentAnalyses: DepartmentAnalysis[]
+    departmentAnalyses: DepartmentAnalysis[],
   ): Promise<Recommendation[]> {
     const orchestrator = this.getOrchestrationAgent(companyId, companyContext);
     const { recommendations } = await orchestrator.recommendResourceAllocation(
-      departmentAnalyses
+      departmentAnalyses,
     );
     return recommendations;
   }
@@ -178,7 +173,7 @@ export class AIService {
         warningMin?: number;
         warningMax?: number;
       }>;
-    }>
+    }>,
   ): Promise<GeneratedAlert[]> {
     const allAlerts: GeneratedAlert[] = [];
 
@@ -190,7 +185,7 @@ export class AIService {
 
     const severityOrder = { critical: 0, warning: 1, watch: 2, opportunity: 3 };
     allAlerts.sort(
-      (a, b) => severityOrder[a.severity] - severityOrder[b.severity]
+      (a, b) => severityOrder[a.severity] - severityOrder[b.severity],
     );
 
     return allAlerts;
@@ -200,7 +195,7 @@ export class AIService {
     companyId: string,
     context: DepartmentContext,
     message: string,
-    history: Array<{ role: "user" | "assistant"; content: string }> = []
+    history: Array<{ role: "user" | "assistant"; content: string }> = [],
   ) {
     const agent = this.getDepartmentAgent(companyId, context);
     return agent.chat(message, history);
@@ -210,7 +205,7 @@ export class AIService {
     companyId: string,
     context: CompanyContext,
     message: string,
-    history: Array<{ role: "user" | "assistant"; content: string }> = []
+    history: Array<{ role: "user" | "assistant"; content: string }> = [],
   ) {
     const agent = this.getOrchestrationAgent(companyId, context);
     return agent.chat(message, history);

@@ -1,4 +1,4 @@
-import type { AIProvider } from "../providers/types";
+import { generateText, type LanguageModel } from "ai";
 import type { MetricData, CompanyContext } from "../types";
 
 export interface PredictionResult {
@@ -28,22 +28,20 @@ export interface RevenueForecast {
 }
 
 export class PredictionService {
-  private provider: AIProvider;
-  private model: string;
+  private model: LanguageModel;
 
-  constructor(provider: AIProvider, model: string) {
-    this.provider = provider;
+  constructor(model: LanguageModel) {
     this.model = model;
   }
 
   private async ask<T>(prompt: string, maxTokens = 1024): Promise<T | null> {
-    const result = await this.provider.chat({
+    const result = await generateText({
       model: this.model,
       messages: [{ role: "user", content: prompt }],
-      maxTokens,
+      maxOutputTokens: maxTokens,
     });
 
-    const jsonMatch = result.content.match(/\{[\s\S]*\}/);
+    const jsonMatch = result.text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return null;
     try {
       return JSON.parse(jsonMatch[0]) as T;
@@ -54,12 +52,12 @@ export class PredictionService {
 
   async predictMetric(
     metricHistory: MetricData[],
-    forecastPeriods: number = 3
+    forecastPeriods: number = 3,
   ): Promise<PredictionResult[]> {
     if (metricHistory.length < 3) return [];
 
     const sorted = [...metricHistory].sort(
-      (a, b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime()
+      (a, b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime(),
     );
 
     const prompt = `Analyze this metric history and predict future values:
@@ -110,7 +108,7 @@ Predict the next ${forecastPeriods} periods. Provide your response as JSON:
       metrics: Record<string, number>;
       lastActivity: Date;
       subscriptionAge: number;
-    }>
+    }>,
   ): Promise<ChurnPrediction[]> {
     const predictions: ChurnPrediction[] = [];
 
@@ -142,7 +140,7 @@ Provide churn prediction as JSON:
   async forecastRevenue(
     historicalRevenue: Array<{ period: string; revenue: number }>,
     context: CompanyContext,
-    forecastMonths: number = 6
+    forecastMonths: number = 6,
   ): Promise<RevenueForecast[]> {
     const prompt = `Forecast revenue for the next ${forecastMonths} months:
 
@@ -196,7 +194,7 @@ Provide forecast as JSON:
       daysInStage: number;
       interactions: number;
       competitorMentioned: boolean;
-    }
+    },
   ): Promise<{
     probability: number;
     confidence: number;
@@ -238,6 +236,6 @@ Provide prediction as JSON:
   }
 }
 
-export function createPredictionService(provider: AIProvider, model: string): PredictionService {
-  return new PredictionService(provider, model);
+export function createPredictionService(model: LanguageModel): PredictionService {
+  return new PredictionService(model);
 }

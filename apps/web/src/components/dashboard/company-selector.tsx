@@ -9,14 +9,15 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useCompany } from "@/lib/company-context";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 
 export function CompanySelector() {
   const { company, companies, selectCompany, isLoading } = useCompany();
+  const navigate = useNavigate();
 
   if (isLoading) {
     return (
-      <Button variant="outline" disabled className="w-[200px] justify-between">
+      <Button variant="outline" disabled className="w-full justify-between">
         Loading...
       </Button>
     );
@@ -24,7 +25,7 @@ export function CompanySelector() {
 
   if (companies.length === 0) {
     return (
-      <Button variant="outline" asChild>
+      <Button variant="outline" className="w-full">
         <Link to="/dashboard/new-company">
           <Plus className="mr-2 h-4 w-4" />
           Create Company
@@ -34,21 +35,24 @@ export function CompanySelector() {
   }
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="outline" className="w-[200px] justify-between">
+    <DropdownMenu> 
+      <DropdownMenuTrigger className={"w-full"}>
+        <Button variant="outline" className="w-full justify-between min-w-0">
           <div className="flex items-center gap-2 truncate">
-            <Building2 className="h-4 w-4 flex-shrink-0" />
+            <Building2 className="h-4 w-4 shrink-0" />
             <span className="truncate">{company?.name ?? "Select company"}</span>
           </div>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-[200px]">
+      <DropdownMenuContent align="start" className="min-w-[200px] max-w-[280px]">
         {companies.map((c) => (
           <DropdownMenuItem
             key={c.id}
-            onSelect={() => selectCompany(c.id)}
+            onClick={() => {
+              selectCompany(c.id);
+              navigate("/dashboard/" + c.id);
+            }}
             className="flex items-center justify-between"
           >
             <span className="truncate">{c.name}</span>
@@ -56,11 +60,12 @@ export function CompanySelector() {
           </DropdownMenuItem>
         ))}
         <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link to="/dashboard/new-company" className="flex items-center">
-            <Plus className="mr-2 h-4 w-4" />
-            New Company
-          </Link>
+        <DropdownMenuItem
+          onClick={() => navigate("/dashboard/new-company")}
+          className="flex items-center"
+        >
+          <Plus className="mr-2 h-4 w-4" />
+          New Company
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

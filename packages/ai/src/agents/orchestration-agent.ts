@@ -1,5 +1,5 @@
+import type { LanguageModel } from "ai";
 import { BaseAgent } from "./base-agent";
-import type { AIProvider } from "../providers/types";
 import {
   getOrchestrationSystemPrompt,
   departmentNames,
@@ -20,12 +20,12 @@ export class OrchestrationAgent extends BaseAgent {
   private departmentSummaries: Record<DepartmentType, string>;
 
   constructor(
-    provider: AIProvider,
+    model: LanguageModel,
     agentConfig: Required<AgentConfig>,
     context: CompanyContext,
     departmentSummaries: Record<DepartmentType, string> = {} as Record<DepartmentType, string>,
   ) {
-    super(provider, agentConfig);
+    super(model, agentConfig);
     this.context = context;
     this.departmentSummaries = departmentSummaries;
   }
@@ -43,7 +43,7 @@ export class OrchestrationAgent extends BaseAgent {
   }
 
   async synthesize(
-    departmentAnalyses: DepartmentAnalysis[]
+    departmentAnalyses: DepartmentAnalysis[],
   ): Promise<{
     analysis: CompanyAnalysis;
     metadata: { inputTokens: number; outputTokens: number; responseTimeMs: number };
@@ -55,7 +55,7 @@ export class OrchestrationAgent extends BaseAgent {
 - Summary: ${a.summary}
 - Key Insights: ${a.keyInsights.join("; ")}
 - Concerns: ${a.concerns.map((c) => c.severity + ": " + c.title).join("; ") || "None"}
-- Opportunities: ${a.opportunities.map((o) => o.title).join("; ") || "None"}`
+- Opportunities: ${a.opportunities.map((o) => o.title).join("; ") || "None"}`,
       )
       .join("\n\n");
 
@@ -110,7 +110,7 @@ Provide your company-wide analysis in the following JSON format:
   }
 
   async detectBottlenecks(
-    departmentAnalyses: DepartmentAnalysis[]
+    departmentAnalyses: DepartmentAnalysis[],
   ): Promise<{
     bottlenecks: Bottleneck[];
     metadata: { inputTokens: number; outputTokens: number; responseTimeMs: number };
@@ -118,7 +118,7 @@ Provide your company-wide analysis in the following JSON format:
     const analysisText = departmentAnalyses
       .map(
         (a) => `${departmentNames[a.departmentType]}: ${a.summary}
-Concerns: ${a.concerns.map((c) => c.title).join(", ") || "None"}`
+Concerns: ${a.concerns.map((c) => c.title).join(", ") || "None"}`,
       )
       .join("\n\n");
 
@@ -147,7 +147,7 @@ Provide bottlenecks in JSON format:
   }
 
   async recommendResourceAllocation(
-    departmentAnalyses: DepartmentAnalysis[]
+    departmentAnalyses: DepartmentAnalysis[],
   ): Promise<{
     recommendations: Recommendation[];
     metadata: { inputTokens: number; outputTokens: number; responseTimeMs: number };
@@ -156,7 +156,7 @@ Provide bottlenecks in JSON format:
       .map(
         (a) => `${departmentNames[a.departmentType]}: Health ${a.healthScore}/100
   Opportunities: ${a.opportunities.map((o) => o.title + " (effort: " + o.effort + ")").join(", ") || "None"}
-  Concerns: ${a.concerns.map((c) => c.title + " (" + c.severity + ")").join(", ") || "None"}`
+  Concerns: ${a.concerns.map((c) => c.title + " (" + c.severity + ")").join(", ") || "None"}`,
       )
       .join("\n\n");
 
@@ -201,7 +201,7 @@ Provide recommendations in JSON format:
   }
 
   async assessStageTransition(
-    departmentAnalyses: DepartmentAnalysis[]
+    departmentAnalyses: DepartmentAnalysis[],
   ): Promise<{
     assessment: StageTransitionAssessment | null;
     metadata: { inputTokens: number; outputTokens: number; responseTimeMs: number };
@@ -255,7 +255,7 @@ Provide assessment in JSON format:
   }
 
   async assessCompanyHealth(
-    departmentAnalyses: DepartmentAnalysis[]
+    departmentAnalyses: DepartmentAnalysis[],
   ): Promise<{
     healthScore: number;
     summary: string;
@@ -289,10 +289,10 @@ Provide in JSON format:
 }
 
 export function createOrchestrationAgent(
-  provider: AIProvider,
+  model: LanguageModel,
   agentConfig: Required<AgentConfig>,
   context: CompanyContext,
   departmentSummaries?: Record<DepartmentType, string>,
 ): OrchestrationAgent {
-  return new OrchestrationAgent(provider, agentConfig, context, departmentSummaries);
+  return new OrchestrationAgent(model, agentConfig, context, departmentSummaries);
 }

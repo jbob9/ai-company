@@ -1,4 +1,4 @@
-import type { AIProvider } from "../providers/types";
+import { generateText, type LanguageModel } from "ai";
 
 export interface RecommendationOutcome {
   recommendationId: string;
@@ -44,11 +44,9 @@ export interface ImprovedPromptContext {
 }
 
 export class LearningService {
-  private provider: AIProvider;
-  private model: string;
+  private model: LanguageModel;
 
-  constructor(provider: AIProvider, model: string) {
-    this.provider = provider;
+  constructor(model: LanguageModel) {
     this.model = model;
   }
 
@@ -107,13 +105,13 @@ export class LearningService {
   }
 
   async generateImprovedContext(
-    outcomes: RecommendationOutcome[]
+    outcomes: RecommendationOutcome[],
   ): Promise<ImprovedPromptContext> {
     const insights = this.analyzeOutcomes(outcomes);
 
     const successfulOutcomes = outcomes.filter((o) => o.outcome?.success);
     const failedOutcomes = outcomes.filter(
-      (o) => o.implemented && o.outcome && !o.outcome.success
+      (o) => o.implemented && o.outcome && !o.outcome.success,
     );
     const rejectedOutcomes = outcomes.filter((o) => !o.accepted);
 
@@ -143,13 +141,13 @@ Provide learning insights as JSON:
   "contextualGuidance": "A paragraph of guidance for future recommendations"
 }`;
 
-    const result = await this.provider.chat({
+    const result = await generateText({
       model: this.model,
       messages: [{ role: "user", content: prompt }],
-      maxTokens: 1024,
+      maxOutputTokens: 1024,
     });
 
-    const jsonMatch = result.content.match(/\{[\s\S]*\}/);
+    const jsonMatch = result.text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       return {
         successfulPatterns: [],
@@ -194,6 +192,6 @@ Provide learning insights as JSON:
   }
 }
 
-export function createLearningService(provider: AIProvider, model: string): LearningService {
-  return new LearningService(provider, model);
+export function createLearningService(model: LanguageModel): LearningService {
+  return new LearningService(model);
 }

@@ -25,6 +25,7 @@ import { trpc } from "@/utils/trpc";
 import { useCompany } from "@/lib/company-context";
 import { authClient } from "@/lib/auth-client";
 import { ModeToggle } from "@/components/mode-toggle";
+import { CompanySelector } from "@/components/dashboard/company-selector";
 import { cn } from "@/lib/utils";
 
 const deptIcons: Record<string, LucideIcon> = {
@@ -90,13 +91,16 @@ export function AppSidebar({ onSelectAgent, activeAgent }: AppSidebarProps) {
 
   return (
     <div className="w-[220px] flex flex-col h-full px-3 py-4">
-      <div className="flex items-center gap-2.5 px-2 mb-6">
+      <div className="flex items-center gap-2.5 px-2 mb-4">
         <div className="w-8 h-8 rounded-lg bg-primary/15 flex items-center justify-center">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="text-primary">
             <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
         </div>
         <span className="font-semibold text-[15px] tracking-tight">Orchestrator</span>
+      </div>
+      <div className="mb-4">
+        <CompanySelector />
       </div>
 
       <nav className="flex flex-col gap-0.5">

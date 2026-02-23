@@ -1,5 +1,5 @@
+import type { LanguageModel } from "ai";
 import { BaseAgent } from "./base-agent";
-import type { AIProvider } from "../providers/types";
 import {
   getDepartmentSystemPrompt,
   getAnalysisPrompt,
@@ -22,12 +22,12 @@ export class DepartmentAgent extends BaseAgent {
   private metrics: MetricData[];
 
   constructor(
-    provider: AIProvider,
+    model: LanguageModel,
     agentConfig: Required<AgentConfig>,
     context: DepartmentContext,
     metrics: MetricData[] = [],
   ) {
-    super(provider, agentConfig);
+    super(model, agentConfig);
     this.context = context;
     this.metrics = metrics;
   }
@@ -87,7 +87,7 @@ export class DepartmentAgent extends BaseAgent {
 
   async generateRecommendations(
     companyContext: CompanyContext,
-    analysisResult?: DepartmentAnalysis
+    analysisResult?: DepartmentAnalysis,
   ): Promise<{
     recommendations: Recommendation[];
     metadata: { inputTokens: number; outputTokens: number; responseTimeMs: number };
@@ -103,7 +103,7 @@ export class DepartmentAgent extends BaseAgent {
     const prompt = getRecommendationPrompt(
       this.context.departmentType,
       JSON.stringify(analysis, null, 2),
-      companyContext
+      companyContext,
     );
 
     const { data, metadata } = await this.sendJsonMessage<{
@@ -197,10 +197,10 @@ Format as JSON: { "insight": "...", "recommendation": "..." }`;
 }
 
 export function createDepartmentAgent(
-  provider: AIProvider,
+  model: LanguageModel,
   agentConfig: Required<AgentConfig>,
   context: DepartmentContext,
   metrics?: MetricData[],
 ): DepartmentAgent {
-  return new DepartmentAgent(provider, agentConfig, context, metrics);
+  return new DepartmentAgent(model, agentConfig, context, metrics);
 }

@@ -1,10 +1,13 @@
 import { useCompany } from "@/lib/company-context";
 import { cn } from "@/lib/utils";
-import { trpc, trpcClient } from "@/utils/trpc";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { trpc } from "@/utils/trpc";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Bot, ChevronUp, Loader2, Send, User } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router";
+import { useChat } from "@ai-sdk/react";
+import { DefaultChatTransport } from "ai";
+import { env } from "@ai-company/env/web";
 
 const MESSAGES_PAGE_SIZE = 20;
 
@@ -22,7 +25,7 @@ export default function ChatByIdPage() {
   }>();
   const { company } = useCompany();
   const queryClient = useQueryClient();
-  const [input, setInput] = useState("");
+  const [inputValue, setInputValue] = useState("");
   const [olderMessages, setOlderMessages] = useState<MessageRow[]>([]);
   const [loadMoreBefore, setLoadMoreBefore] = useState<string | null>(null);
   const [hasOlderMore, setHasOlderMore] = useState(true);
@@ -62,49 +65,63 @@ export default function ChatByIdPage() {
     }
   }, [olderPage]);
 
-  const chatMutation = useMutation({
-    mutationFn: async (message: string) => {
-      return trpcClient.ai.chat.mutate({
-        companyId: companyId || "",
-        conversationId: chatId ?? undefined,
-        message,
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["ai", "getConversation", { id: chatId }],
-      });
+  // Historical DB messages
+  const dbMessages: MessageRow[] = [
+    ...olderMessages,
+    ...(latestPage?.messages ?? []),
+  ];
+  const canLoadOlder =
+    dbMessages.length > 0 &&
+    (olderMessages.length === 0
+      ? (latestPage?.hasMore ?? false)
+      : hasOlderMore);
+
+  // useChat for streaming new messages in this conversation
+  const transport = useMemo(
+    () =>
+      new DefaultChatTransport({
+        api: `${env.VITE_SERVER_URL}/api/chat`,
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: {
+          companyId: companyId ?? "",
+          departmentType: conversation?.departmentType ?? undefined,
+          conversationId: chatId,
+        },
+      }),
+    [companyId, conversation?.departmentType, chatId],
+  );
+
+  const { messages: streamMessages, sendMessage, status, setMessages: setStreamMessages } = useChat({
+    id: `chat-${chatId}`,
+    transport,
+    onFinish: () => {
       queryClient.invalidateQueries({ queryKey: ["ai", "listMessages"] });
       queryClient.invalidateQueries({ queryKey: ["ai", "listConversations"] });
     },
   });
 
-  const displayMessages: MessageRow[] = [
-    ...olderMessages,
-    ...(latestPage?.messages ?? []),
-  ];
-  const canLoadOlder =
-    displayMessages.length > 0 &&
-    (olderMessages.length === 0
-      ? (latestPage?.hasMore ?? false)
-      : hasOlderMore);
+  // Reset streaming messages when chatId changes
+  useEffect(() => {
+    setStreamMessages([]);
+  }, [chatId, setStreamMessages]);
+
+  const isStreaming = status === "streaming" || status === "submitted";
+
   const isLoading =
     convLoading ||
-    (!!chatId &&
-      !!conversation &&
-      latestLoading &&
-      displayMessages.length === 0);
+    (!!chatId && !!conversation && latestLoading && dbMessages.length === 0);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [displayMessages.length, chatMutation.isPending]);
+  }, [dbMessages.length, streamMessages.length, isStreaming]);
 
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!input.trim() || chatMutation.isPending) return;
-    const text = input.trim();
-    setInput("");
-    chatMutation.mutate(text);
+    if (!inputValue.trim() || isStreaming) return;
+    const text = inputValue.trim();
+    setInputValue("");
+    sendMessage({ text });
     if (inputRef.current) inputRef.current.style.height = "auto";
   };
 
@@ -116,7 +133,7 @@ export default function ChatByIdPage() {
   };
 
   const handleLoadOlder = () => {
-    const oldest = displayMessages[0];
+    const oldest = dbMessages[0];
     if (!oldest?.createdAt) return;
     const before =
       typeof oldest.createdAt === "string"
@@ -124,6 +141,15 @@ export default function ChatByIdPage() {
         : oldest.createdAt.toISOString();
     setLoadMoreBefore(before);
   };
+
+  function getStreamMessageText(message: (typeof streamMessages)[number]): string {
+    return (
+      message.parts
+        ?.filter((p): p is { type: "text"; text: string } => p.type === "text")
+        .map((p) => p.text)
+        .join("") ?? ""
+    );
+  }
 
   if (!companyId || !chatId) return null;
 
@@ -159,7 +185,6 @@ export default function ChatByIdPage() {
 
   return (
     <div className="flex flex-col h-full min-w-0">
-      {/* Header with title */}
       <div className="shrink-0 flex items-center gap-3 px-4 py-3 border-b border-border/50">
         <Link
           to={basePath}
@@ -173,7 +198,6 @@ export default function ChatByIdPage() {
         </h1>
       </div>
 
-      {/* Messages with load more at top */}
       <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4">
         <div className="max-w-2xl mx-auto space-y-4 sm:space-y-5">
           {canLoadOlder && (
@@ -194,7 +218,9 @@ export default function ChatByIdPage() {
             </div>
           )}
           <div ref={topAnchorRef} />
-          {displayMessages.map((message) => (
+
+          {/* Historical messages from DB */}
+          {dbMessages.map((message) => (
             <div
               key={message.id}
               className={cn(
@@ -226,7 +252,46 @@ export default function ChatByIdPage() {
               )}
             </div>
           ))}
-          {chatMutation.isPending && (
+
+          {/* New streaming messages from useChat */}
+          {streamMessages.map((message) => {
+            const text = getStreamMessageText(message);
+            if (!text) return null;
+            return (
+              <div
+                key={message.id}
+                className={cn(
+                  "flex gap-2 sm:gap-3",
+                  message.role === "user" ? "justify-end" : "justify-start",
+                )}
+              >
+                {message.role === "assistant" && (
+                  <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                    <Bot className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
+                  </div>
+                )}
+                <div
+                  className={cn(
+                    "max-w-[90%] sm:max-w-[75%] rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3",
+                    message.role === "user"
+                      ? "bg-primary text-primary-foreground"
+                      : "glass-panel",
+                  )}
+                >
+                  <p className="text-[13.5px] leading-relaxed whitespace-pre-wrap">
+                    {text}
+                  </p>
+                </div>
+                {message.role === "user" && (
+                  <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-foreground/10 flex items-center justify-center shrink-0 mt-0.5">
+                    <User className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-foreground/70" />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {isStreaming && streamMessages.at(-1)?.role !== "assistant" && (
             <div className="flex gap-3 justify-start">
               <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
                 <Bot className="h-4 w-4 text-primary" />
@@ -244,7 +309,6 @@ export default function ChatByIdPage() {
         </div>
       </div>
 
-      {/* Input */}
       <div className="shrink-0 px-4 sm:px-6 pb-4 sm:pb-5 pt-2">
         <div className="max-w-2xl mx-auto">
           <form onSubmit={handleSubmit}>
@@ -252,11 +316,11 @@ export default function ChatByIdPage() {
               <div className="flex items-end gap-2 p-3">
                 <textarea
                   ref={inputRef}
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder="Continue the conversation…"
-                  disabled={chatMutation.isPending}
+                  disabled={isStreaming}
                   rows={1}
                   className="flex-1 resize-none bg-transparent text-[13.5px] placeholder:text-muted-foreground/50 focus:outline-none min-h-[36px] py-2 leading-snug"
                 />
@@ -264,15 +328,15 @@ export default function ChatByIdPage() {
               <div className="flex justify-end px-3 pb-2.5 pt-0">
                 <button
                   type="submit"
-                  disabled={!input.trim() || chatMutation.isPending}
+                  disabled={!inputValue.trim() || isStreaming}
                   className={cn(
                     "w-8 h-8 rounded-xl flex items-center justify-center transition-all",
-                    input.trim() && !chatMutation.isPending
+                    inputValue.trim() && !isStreaming
                       ? "bg-primary text-primary-foreground hover:opacity-90"
                       : "bg-foreground/10 text-muted-foreground",
                   )}
                 >
-                  {chatMutation.isPending ? (
+                  {isStreaming ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <Send className="h-3.5 w-3.5" />

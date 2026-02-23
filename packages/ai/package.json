@@ -13,9 +13,10 @@
   "dependencies": {
     "@ai-company/db": "workspace:*",
     "@ai-company/env": "workspace:*",
-    "@anthropic-ai/sdk": "^0.39.0",
-    "@google/genai": "^1.0.0",
-    "openai": "^4.82.0",
+    "@ai-sdk/anthropic": "^3.0.46",
+    "@ai-sdk/google": "^3.0.30",
+    "@ai-sdk/openai": "^3.0.30",
+    "ai": "^6.0.97",
     "zod": "catalog:"
   },
   "devDependencies": {

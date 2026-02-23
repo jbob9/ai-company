@@ -49,7 +49,7 @@ function useIsMobile() {
 }
 
 function DashboardInner() {
-  const { company, isLoading } = useCompany();
+  const { company, companies, isLoading, selectCompany } = useCompany();
   const navigate = useNavigate();
   const location = useLocation();
   const isMobile = useIsMobile();
@@ -90,19 +90,38 @@ function DashboardInner() {
   }, [isMobile, location.pathname]);
 
   const basePath = company ? "/dashboard/" + company.id : "/dashboard";
+  const isNewCompanyPage = location.pathname === "/dashboard/new-company";
   const isHomePath =
     location.pathname === "/dashboard" ||
     location.pathname === basePath ||
     location.pathname === basePath + "/";
-  const isSubPage = !isHomePath && location.pathname.startsWith(basePath);
+  const isSubPage =
+    !isHomePath && (location.pathname.startsWith(basePath) || isNewCompanyPage);
   const chatMatch = location.pathname.match(/^\/dashboard\/([^/]+)\/chat\/([^/]+)$/);
   const activeChatId = chatMatch ? chatMatch[2] : undefined;
 
+  // Redirect /dashboard to selected company's dashboard
   useEffect(() => {
     if (!isLoading && company && location.pathname === "/dashboard") {
       navigate("/dashboard/" + company.id, { replace: true });
     }
   }, [company, isLoading, location.pathname, navigate]);
+
+  // Sync context from URL and redirect if company not in user's list
+  useEffect(() => {
+    if (isLoading || companies.length === 0) return;
+    const match = location.pathname.match(/^\/dashboard\/([^/]+)/);
+    const urlCompanyId = match && match[1] !== "new-company" ? match[1] : null;
+    if (!urlCompanyId) return;
+    const isMember = companies.some((c) => c.id === urlCompanyId);
+    if (!isMember) {
+      navigate("/dashboard", { replace: true });
+      return;
+    }
+    if (company?.id !== urlCompanyId) {
+      selectCompany(urlCompanyId);
+    }
+  }, [location.pathname, companies, isLoading, company?.id, selectCompany, navigate]);
 
   if (isLoading) {
     return (
@@ -112,7 +131,8 @@ function DashboardInner() {
     );
   }
 
-  if (!company) {
+  // When user has no company, show empty state unless they're on the create-company page
+  if (!company && !isNewCompanyPage) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4 px-6">
         <h2 className="text-xl font-semibold">Welcome to AI Company Orchestrator</h2>

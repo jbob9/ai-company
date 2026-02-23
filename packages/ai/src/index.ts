@@ -1,24 +1,9 @@
 // Types
 export * from "./types";
 
-// Providers
-export {
-  type AIProvider,
-  type ChatParams,
-  type ChatMessage,
-  type ChatResult,
-  type ProviderName,
-  type ProviderConfig,
-  DEFAULT_MODELS,
-  AnthropicProvider,
-  GeminiProvider,
-  OpenAIProvider,
-  registerProvider,
-  createProvider,
-  createProviderFromConfig,
-  getDefaultModel,
-  listProviders,
-} from "./providers";
+// Providers (AI SDK model helper)
+export { getModel, DEFAULT_MODELS } from "./providers/model";
+export type { ProviderName } from "./providers/model";
 
 // Prompts
 export {

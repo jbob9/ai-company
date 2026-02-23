@@ -9,8 +9,7 @@ import { kpiDefinition, kpiValue } from "@ai-company/db/schema/metrics";
 import { env } from "@ai-company/env/server";
 import {
   createPredictionService,
-  createProvider,
-  getDefaultModel,
+  getModel,
   type CompanyContext,
 } from "@ai-company/ai";
 
@@ -48,9 +47,8 @@ function getPredictionService() {
     });
   }
 
-  const provider = createProvider(providerName, apiKey);
-  const model = getDefaultModel(providerName);
-  return createPredictionService(provider, model);
+  const model = getModel(providerName, apiKey);
+  return createPredictionService(model);
 }
 
 export const predictionsRouter = router({

@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Sparkles } from "lucide-react";
 
 import { trpcClient } from "@/utils/trpc";
+import { useCompany } from "@/lib/company-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,6 +13,7 @@ import { toast } from "sonner";
 export default function NewCompanyPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { selectCompany } = useCompany();
   const [name, setName] = useState("");
   const [stage, setStage] = useState("bootstrap");
   const [industry, setIndustry] = useState("");
@@ -27,6 +29,7 @@ export default function NewCompanyPage() {
       queryClient.invalidateQueries({ queryKey: ["company"] });
       toast.success("Company created");
       if (company) {
+        selectCompany(company.id);
         navigate("/dashboard/" + company.id);
       }
     },

@@ -1,29 +1,24 @@
-import { useState, useRef, useEffect } from "react";
+import { useRef, useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
+import { useChat } from "@ai-sdk/react";
+import { DefaultChatTransport } from "ai";
 import {
   Send,
   Bot,
   User,
   Loader2,
   Sparkles,
-  BarChart3,
   AlertCircle,
   Building2,
   Paperclip,
-  Settings,
   SlidersHorizontal,
   Mic,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { trpcClient } from "@/utils/trpc";
 import { useCompany } from "@/lib/company-context";
 import { authClient } from "@/lib/auth-client";
-
-interface Message {
-  role: "user" | "assistant";
-  content: string;
-}
+import { env } from "@ai-company/env/web";
 
 interface AIHomeProps {
   activeDepartment?: string;
@@ -47,17 +42,49 @@ export function AIHome({ activeDepartment, onDepartmentChange }: AIHomeProps) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState("");
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [inputValue, setInputValue] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const isInChat = messages.length > 0;
   const userName = session?.user?.name?.split(" ")[0] || "there";
   const agentLabel = activeDepartment
     ? deptLabels[activeDepartment] || "Department AI"
     : "Orchestrator";
+
+  const transport = useMemo(
+    () =>
+      new DefaultChatTransport({
+        api: `${env.VITE_SERVER_URL}/api/chat`,
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: {
+          companyId: company?.id ?? "",
+          departmentType: activeDepartment,
+          conversationId: conversationId ?? undefined,
+        },
+      }),
+    [company?.id, activeDepartment, conversationId],
+  );
+
+  const { messages, sendMessage, status, setMessages } = useChat({
+    id: `home-${company?.id ?? "none"}-${activeDepartment ?? "orchestrator"}`,
+    transport,
+    onFinish: ({ message }) => {
+      const meta = message.metadata as Record<string, unknown> | undefined;
+      const newConvId = meta?.conversationId as string | undefined;
+      if (newConvId && !conversationId) {
+        setConversationId(newConvId);
+        queryClient.invalidateQueries({ queryKey: ["ai", "listConversations"] });
+        if (company?.id) {
+          navigate(`/dashboard/${company.id}/chat/${newConvId}`);
+        }
+      }
+    },
+  });
+
+  const isStreaming = status === "streaming" || status === "submitted";
+  const isInChat = messages.length > 0;
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -66,39 +93,15 @@ export function AIHome({ activeDepartment, onDepartmentChange }: AIHomeProps) {
   useEffect(() => {
     setMessages([]);
     setConversationId(null);
-  }, [activeDepartment]);
-
-  const chatMutation = useMutation({
-    mutationFn: async (message: string) => {
-      return trpcClient.ai.chat.mutate({
-        companyId: company?.id || "",
-        departmentType: activeDepartment as Parameters<typeof trpcClient.ai.chat.mutate>[0]["departmentType"],
-        conversationId: conversationId ?? undefined,
-        message,
-      });
-    },
-    onSuccess: (data) => {
-      const isNewConversation = !conversationId;
-      setConversationId(data.conversationId);
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: data.content },
-      ]);
-      queryClient.invalidateQueries({ queryKey: ["ai", "listConversations"] });
-      if (isNewConversation && data.conversationId && company?.id) {
-        navigate(`/dashboard/${company.id}/chat/${data.conversationId}`);
-      }
-    },
-  });
+  }, [activeDepartment, setMessages]);
 
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!input.trim() || chatMutation.isPending) return;
+    if (!inputValue.trim() || isStreaming) return;
 
-    const userMessage = input.trim();
-    setInput("");
-    setMessages((prev) => [...prev, { role: "user", content: userMessage }]);
-    chatMutation.mutate(userMessage);
+    const text = inputValue.trim();
+    setInputValue("");
+    sendMessage({ text });
 
     if (inputRef.current) {
       inputRef.current.style.height = "auto";
@@ -113,9 +116,8 @@ export function AIHome({ activeDepartment, onDepartmentChange }: AIHomeProps) {
   };
 
   const handleQuickAction = (prompt: string) => {
-    setInput("");
-    setMessages((prev) => [...prev, { role: "user", content: prompt }]);
-    chatMutation.mutate(prompt);
+    setInputValue("");
+    sendMessage({ text: prompt });
   };
 
   const handleTextareaInput = (e: React.FormEvent<HTMLTextAreaElement>) => {
@@ -144,6 +146,15 @@ export function AIHome({ activeDepartment, onDepartmentChange }: AIHomeProps) {
       prompt: "Are there any critical alerts or issues I should be aware of? What immediate actions do you recommend?",
     },
   ];
+
+  function getMessageText(message: (typeof messages)[number]): string {
+    return (
+      message.parts
+        ?.filter((p): p is { type: "text"; text: string } => p.type === "text")
+        .map((p) => p.text)
+        .join("") ?? ""
+    );
+  }
 
   return (
     <div className="flex-1 flex flex-col h-full min-w-0">
@@ -185,39 +196,43 @@ export function AIHome({ activeDepartment, onDepartmentChange }: AIHomeProps) {
       ) : (
         <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4">
           <div className="max-w-2xl mx-auto space-y-4 sm:space-y-5">
-            {messages.map((message, index) => (
-              <div
-                key={index}
-                className={cn(
-                  "flex gap-2 sm:gap-3",
-                  message.role === "user" ? "justify-end" : "justify-start"
-                )}
-              >
-                {message.role === "assistant" && (
-                  <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
-                    <Bot className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
-                  </div>
-                )}
+            {messages.map((message) => {
+              const text = getMessageText(message);
+              if (!text) return null;
+              return (
                 <div
+                  key={message.id}
                   className={cn(
-                    "max-w-[90%] sm:max-w-[75%] rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3",
-                    message.role === "user"
-                      ? "bg-primary text-primary-foreground"
-                      : "glass-panel"
+                    "flex gap-2 sm:gap-3",
+                    message.role === "user" ? "justify-end" : "justify-start",
                   )}
                 >
-                  <p className="text-[13.5px] leading-relaxed whitespace-pre-wrap">
-                    {message.content}
-                  </p>
-                </div>
-                {message.role === "user" && (
-                  <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-foreground/10 flex items-center justify-center shrink-0 mt-0.5">
-                    <User className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-foreground/70" />
+                  {message.role === "assistant" && (
+                    <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                      <Bot className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
+                    </div>
+                  )}
+                  <div
+                    className={cn(
+                      "max-w-[90%] sm:max-w-[75%] rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3",
+                      message.role === "user"
+                        ? "bg-primary text-primary-foreground"
+                        : "glass-panel",
+                    )}
+                  >
+                    <p className="text-[13.5px] leading-relaxed whitespace-pre-wrap">
+                      {text}
+                    </p>
                   </div>
-                )}
-              </div>
-            ))}
-            {chatMutation.isPending && (
+                  {message.role === "user" && (
+                    <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-foreground/10 flex items-center justify-center shrink-0 mt-0.5">
+                      <User className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-foreground/70" />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {isStreaming && messages.at(-1)?.role !== "assistant" && (
               <div className="flex gap-3 justify-start">
                 <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
                   <Bot className="h-4 w-4 text-primary" />
@@ -244,12 +259,12 @@ export function AIHome({ activeDepartment, onDepartmentChange }: AIHomeProps) {
                 <Sparkles className="h-4 w-4 text-primary/50 mb-2.5 shrink-0" />
                 <textarea
                   ref={inputRef}
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
                   onKeyDown={handleKeyDown}
                   onInput={handleTextareaInput}
                   placeholder={"Ask " + agentLabel + " anything about your company..."}
-                  disabled={chatMutation.isPending}
+                  disabled={isStreaming}
                   rows={1}
                   className="flex-1 resize-none bg-transparent text-[13.5px] placeholder:text-muted-foreground/50 focus:outline-none min-h-[36px] py-2 leading-snug"
                 />
@@ -280,15 +295,15 @@ export function AIHome({ activeDepartment, onDepartmentChange }: AIHomeProps) {
                   </button>
                   <button
                     type="submit"
-                    disabled={!input.trim() || chatMutation.isPending}
+                    disabled={!inputValue.trim() || isStreaming}
                     className={cn(
                       "w-8 h-8 rounded-xl flex items-center justify-center transition-all",
-                      input.trim() && !chatMutation.isPending
+                      inputValue.trim() && !isStreaming
                         ? "bg-primary text-primary-foreground hover:opacity-90"
-                        : "bg-foreground/10 text-muted-foreground"
+                        : "bg-foreground/10 text-muted-foreground",
                     )}
                   >
-                    {chatMutation.isPending ? (
+                    {isStreaming ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
                       <Send className="h-3.5 w-3.5" />

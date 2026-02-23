@@ -1,12 +1,14 @@
-import type { AIProvider, ChatMessage } from "../providers/types";
+import { generateText, streamText, type LanguageModel } from "ai";
 import type { Message, AgentConfig, AIResponseMetadata } from "../types";
 
+export type ChatStream = ReturnType<typeof streamText>;
+
 export abstract class BaseAgent {
-  protected provider: AIProvider;
+  protected model: LanguageModel;
   protected config: Required<AgentConfig>;
 
-  constructor(provider: AIProvider, config: Required<AgentConfig>) {
-    this.provider = provider;
+  constructor(model: LanguageModel, config: Required<AgentConfig>) {
+    this.model = model;
     this.config = config;
   }
 
@@ -14,11 +16,11 @@ export abstract class BaseAgent {
 
   protected async sendMessage(
     userMessage: string,
-    history: Message[] = []
+    history: Message[] = [],
   ): Promise<{ content: string; metadata: AIResponseMetadata }> {
     const startTime = Date.now();
 
-    const messages: ChatMessage[] = [
+    const messages = [
       ...history
         .filter((m) => m.role !== "system")
         .map((m) => ({
@@ -28,20 +30,20 @@ export abstract class BaseAgent {
       { role: "user" as const, content: userMessage },
     ];
 
-    const result = await this.provider.chat({
-      model: this.config.model,
-      messages,
+    const result = await generateText({
+      model: this.model,
       system: this.getSystemPrompt(),
-      maxTokens: this.config.maxTokens,
+      messages,
+      maxOutputTokens: this.config.maxTokens,
       temperature: this.config.temperature,
     });
 
     return {
-      content: result.content,
+      content: result.text,
       metadata: {
-        model: result.model,
-        inputTokens: result.usage.inputTokens,
-        outputTokens: result.usage.outputTokens,
+        model: result.response.modelId,
+        inputTokens: result.usage.inputTokens ?? 0,
+        outputTokens: result.usage.outputTokens ?? 0,
         responseTimeMs: Date.now() - startTime,
       },
     };
@@ -49,7 +51,7 @@ export abstract class BaseAgent {
 
   protected async sendJsonMessage<T>(
     userMessage: string,
-    history: Message[] = []
+    history: Message[] = [],
   ): Promise<{ data: T; metadata: AIResponseMetadata }> {
     const { content, metadata } = await this.sendMessage(userMessage, history);
 
@@ -68,8 +70,28 @@ export abstract class BaseAgent {
 
   async chat(
     message: string,
-    history: Message[] = []
+    history: Message[] = [],
   ): Promise<{ content: string; metadata: AIResponseMetadata }> {
     return this.sendMessage(message, history);
+  }
+
+  streamChat(message: string, history: Message[] = []): ChatStream {
+    const messages = [
+      ...history
+        .filter((m) => m.role !== "system")
+        .map((m) => ({
+          role: m.role as "user" | "assistant",
+          content: m.content,
+        })),
+      { role: "user" as const, content: message },
+    ];
+
+    return streamText({
+      model: this.model,
+      system: this.getSystemPrompt(),
+      messages,
+      maxOutputTokens: this.config.maxTokens,
+      temperature: this.config.temperature,
+    });
   }
 }
