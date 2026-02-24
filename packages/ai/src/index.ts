@@ -5,6 +5,15 @@ export * from "./types";
 export { getModel, DEFAULT_MODELS } from "./providers/model";
 export type { ProviderName } from "./providers/model";
 
+// Model presets (provider + concrete model)
+export {
+  MODEL_PRESETS,
+  getPresetById,
+  getDefaultPreset,
+  type ModelPreset,
+  type ModelPresetId,
+} from "./model-presets";
+
 // Prompts
 export {
   departmentKPIs,

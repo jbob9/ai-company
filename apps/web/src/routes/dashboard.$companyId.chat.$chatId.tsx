@@ -8,6 +8,11 @@ import { Link, useParams } from "react-router";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { env } from "@ai-company/env/web";
+import {
+  MODEL_PRESETS,
+  getDefaultPreset,
+  type ModelPresetId,
+} from "@ai-company/ai";
 
 const MESSAGES_PAGE_SIZE = 20;
 
@@ -77,6 +82,12 @@ export default function ChatByIdPage() {
       : hasOlderMore);
 
   // useChat for streaming new messages in this conversation
+  const initialPresetId: ModelPresetId =
+    (conversation?.modelPresetId as ModelPresetId | undefined) ??
+    getDefaultPreset().id;
+
+  const [modelPresetId] = useState<ModelPresetId>(initialPresetId);
+
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
@@ -87,9 +98,10 @@ export default function ChatByIdPage() {
           companyId: companyId ?? "",
           departmentType: conversation?.departmentType ?? undefined,
           conversationId: chatId,
+          modelPresetId,
         },
       }),
-    [companyId, conversation?.departmentType, chatId],
+    [companyId, conversation?.departmentType, chatId, modelPresetId],
   );
 
   const { messages: streamMessages, sendMessage, status, setMessages: setStreamMessages } = useChat({

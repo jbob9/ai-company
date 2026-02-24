@@ -10,6 +10,7 @@ import {
 import { company } from "./companies";
 import { departmentTypeEnum } from "./departments";
 import { user } from "./auth";
+import { aiProviderEnum } from "./user-ai-keys";
 
 // Conversation with AI agents
 export const aiConversation = pgTable(
@@ -26,6 +27,11 @@ export const aiConversation = pgTable(
     // Which agent is this conversation with?
     // null means orchestration AI
     departmentType: departmentTypeEnum("department_type"),
+
+    // Model configuration for this conversation (optional for legacy rows)
+    modelPresetId: text("model_preset_id"),
+    modelProvider: aiProviderEnum("model_provider"),
+    modelName: text("model_name"),
 
     // Conversation metadata
     title: text("title"), // Auto-generated or user-set title
@@ -44,6 +50,7 @@ export const aiConversation = pgTable(
     index("conversation_company_idx").on(table.companyId),
     index("conversation_user_idx").on(table.userId),
     index("conversation_dept_idx").on(table.departmentType),
+    index("conversation_model_provider_idx").on(table.modelProvider),
     index("conversation_created_idx").on(table.createdAt),
   ]
 );

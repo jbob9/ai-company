@@ -118,6 +118,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@ai-company/ai':
+        specifier: workspace:*
+        version: link:../../packages/ai
       '@ai-company/api':
         specifier: workspace:*
         version: link:../../packages/api

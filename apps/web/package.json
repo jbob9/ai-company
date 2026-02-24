@@ -9,6 +9,7 @@
     "typecheck": "react-router typegen && tsc"
   },
   "dependencies": {
+    "@ai-company/ai": "workspace:*",
     "@ai-company/api": "workspace:*",
     "@ai-company/auth": "workspace:*",
     "@ai-company/env": "workspace:*",

@@ -1,24 +1,39 @@
-import { useRef, useEffect, useState, useMemo } from "react";
-import { useNavigate } from "react-router";
-import { useQueryClient } from "@tanstack/react-query";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { authClient } from "@/lib/auth-client";
+import { useCompany } from "@/lib/company-context";
+import { cn } from "@/lib/utils";
+import {
+  MODEL_PRESETS,
+  getDefaultPreset,
+  type ModelPreset,
+  type ModelPresetId,
+} from "@ai-company/ai";
+import { env } from "@ai-company/env/web";
 import { useChat } from "@ai-sdk/react";
+import { useQueryClient } from "@tanstack/react-query";
 import { DefaultChatTransport } from "ai";
 import {
-  Send,
-  Bot,
-  User,
-  Loader2,
-  Sparkles,
   AlertCircle,
+  Bot,
   Building2,
-  Paperclip,
-  SlidersHorizontal,
+  Loader2,
   Mic,
+  Paperclip,
+  Send,
+  SlidersHorizontal,
+  Sparkles,
+  User,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { useCompany } from "@/lib/company-context";
-import { authClient } from "@/lib/auth-client";
-import { env } from "@ai-company/env/web";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router";
 
 interface AIHomeProps {
   activeDepartment?: string;
@@ -44,6 +59,9 @@ export function AIHome({ activeDepartment, onDepartmentChange }: AIHomeProps) {
 
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState("");
+  const [modelPresetId, setModelPresetId] = useState<ModelPresetId>(
+    () => getDefaultPreset().id,
+  );
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -52,6 +70,10 @@ export function AIHome({ activeDepartment, onDepartmentChange }: AIHomeProps) {
     ? deptLabels[activeDepartment] || "Department AI"
     : "Orchestrator";
 
+  const selectedPreset =
+    MODEL_PRESETS.find((p: ModelPreset) => p.id === modelPresetId) ??
+    getDefaultPreset();
+  console.log(selectedPreset, "selectedPreset");
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
@@ -62,9 +84,10 @@ export function AIHome({ activeDepartment, onDepartmentChange }: AIHomeProps) {
           companyId: company?.id ?? "",
           departmentType: activeDepartment,
           conversationId: conversationId ?? undefined,
+          modelPresetId,
         },
       }),
-    [company?.id, activeDepartment, conversationId],
+    [company?.id, activeDepartment, conversationId, modelPresetId],
   );
 
   const { messages, sendMessage, status, setMessages } = useChat({
@@ -75,7 +98,9 @@ export function AIHome({ activeDepartment, onDepartmentChange }: AIHomeProps) {
       const newConvId = meta?.conversationId as string | undefined;
       if (newConvId && !conversationId) {
         setConversationId(newConvId);
-        queryClient.invalidateQueries({ queryKey: ["ai", "listConversations"] });
+        queryClient.invalidateQueries({
+          queryKey: ["ai", "listConversations"],
+        });
         if (company?.id) {
           navigate(`/dashboard/${company.id}/chat/${newConvId}`);
         }
@@ -131,19 +156,22 @@ export function AIHome({ activeDepartment, onDepartmentChange }: AIHomeProps) {
       icon: Sparkles,
       title: "Analyze company",
       desc: "Get a full health assessment across all departments",
-      prompt: "Give me a comprehensive analysis of our company health across all departments. What are the key strengths, concerns, and recommended actions?",
+      prompt:
+        "Give me a comprehensive analysis of our company health across all departments. What are the key strengths, concerns, and recommended actions?",
     },
     {
       icon: Building2,
       title: "Department insights",
       desc: "Deep dive into any department's performance",
-      prompt: "What department needs the most attention right now? Give me a breakdown of each department's status and any critical issues.",
+      prompt:
+        "What department needs the most attention right now? Give me a breakdown of each department's status and any critical issues.",
     },
     {
       icon: AlertCircle,
       title: "Review alerts",
       desc: "Understand active alerts and recommended actions",
-      prompt: "Are there any critical alerts or issues I should be aware of? What immediate actions do you recommend?",
+      prompt:
+        "Are there any critical alerts or issues I should be aware of? What immediate actions do you recommend?",
     },
   ];
 
@@ -185,7 +213,9 @@ export function AIHome({ activeDepartment, onDepartmentChange }: AIHomeProps) {
                 <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center mb-3 group-hover:bg-primary/15 transition-colors">
                   <action.icon className="h-4.5 w-4.5 text-primary" />
                 </div>
-                <h3 className="text-[13.5px] font-semibold mb-1">{action.title}</h3>
+                <h3 className="text-[13.5px] font-semibold mb-1">
+                  {action.title}
+                </h3>
                 <p className="text-[11.5px] text-muted-foreground leading-relaxed">
                   {action.desc}
                 </p>
@@ -263,7 +293,9 @@ export function AIHome({ activeDepartment, onDepartmentChange }: AIHomeProps) {
                   onChange={(e) => setInputValue(e.target.value)}
                   onKeyDown={handleKeyDown}
                   onInput={handleTextareaInput}
-                  placeholder={"Ask " + agentLabel + " anything about your company..."}
+                  placeholder={
+                    "Ask " + agentLabel + " anything about your company..."
+                  }
                   disabled={isStreaming}
                   rows={1}
                   className="flex-1 resize-none bg-transparent text-[13.5px] placeholder:text-muted-foreground/50 focus:outline-none min-h-[36px] py-2 leading-snug"
@@ -278,13 +310,49 @@ export function AIHome({ activeDepartment, onDepartmentChange }: AIHomeProps) {
                     <Paperclip className="h-3.5 w-3.5" />
                     Attach
                   </button>
-                  <button
-                    type="button"
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] text-muted-foreground hover:text-foreground rounded-lg hover:bg-foreground/4 transition-colors"
-                  >
-                    <SlidersHorizontal className="h-3.5 w-3.5" />
-                    Options
-                  </button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      type="button"
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] text-muted-foreground hover:text-foreground rounded-lg hover:bg-foreground/4 transition-colors outline-none"
+                    >
+                      <SlidersHorizontal className="h-3.5 w-3.5" />
+                      <span className="hidden lg:inline">
+                        {selectedPreset.label}
+                      </span>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start">
+                      <DropdownMenuGroup>
+                        <DropdownMenuLabel className="text-[11px]">
+                          AI Model
+                        </DropdownMenuLabel>
+                        <DropdownMenuRadioGroup
+                          value={modelPresetId}
+                          onValueChange={(value) =>
+                            setModelPresetId(value as ModelPresetId)
+                          }
+                        >
+                          {MODEL_PRESETS.map((preset) => (
+                            <DropdownMenuRadioItem
+                              key={preset.id}
+                              value={preset.id}
+                              className="text-[12px]"
+                            >
+                              <div className="flex flex-col">
+                                <span className="font-medium">
+                                  {preset.label}
+                                </span>
+                                {preset.description && (
+                                  <span className="text-[11px] text-muted-foreground">
+                                    {preset.description}
+                                  </span>
+                                )}
+                              </div>
+                            </DropdownMenuRadioItem>
+                          ))}
+                        </DropdownMenuRadioGroup>
+                      </DropdownMenuGroup>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <button

@@ -31,6 +31,9 @@ import {
   getModel,
   getDepartmentSystemPrompt,
   getOrchestrationSystemPrompt,
+  getDefaultPreset,
+  getPresetById,
+  type ModelPreset,
   type DepartmentContext,
   type CompanyContext,
   type MetricData,
@@ -72,9 +75,12 @@ app.use(
 
 // --- Helpers for /api/chat ---
 
-async function getLanguageModelForUser(userId: string) {
-  const { provider, apiKey } = await getEffectiveAIConfigForUser(userId);
-  return getModel(provider, apiKey);
+async function getLanguageModelForUserAndPreset(
+  userId: string,
+  preset: ModelPreset,
+) {
+  const { provider, apiKey } = await getEffectiveAIConfigForUser(userId, preset.provider);
+  return getModel(provider, apiKey, preset.model);
 }
 
 async function loadCompanyContext(companyId: string): Promise<CompanyContext> {
@@ -188,6 +194,7 @@ app.post("/api/chat", async (c) => {
     companyId: string;
     departmentType?: string;
     conversationId?: string;
+    modelPresetId?: string;
   };
 
   if (!companyId || !uiMessages?.length) {
@@ -204,6 +211,12 @@ app.post("/api/chat", async (c) => {
     return c.json({ error: "Access denied" }, 403);
   }
 
+  // Choose model preset (server-validated)
+  const preset: ModelPreset =
+    (typeof body.modelPresetId === "string" &&
+      getPresetById(body.modelPresetId as any)) ||
+    getDefaultPreset();
+
   // Resolve or create conversation
   let conversationId = incomingConversationId;
   if (!conversationId) {
@@ -219,8 +232,11 @@ app.post("/api/chat", async (c) => {
       id: conversationId,
       companyId,
       userId,
-      departmentType: departmentType as any ?? null,
+      departmentType: (departmentType as any) ?? null,
       title,
+      modelPresetId: preset.id,
+      modelProvider: preset.provider as any,
+      modelName: preset.model,
     });
   }
 
@@ -254,7 +270,7 @@ app.post("/api/chat", async (c) => {
 
   let model;
   try {
-    model = await getLanguageModelForUser(userId);
+    model = await getLanguageModelForUserAndPreset(userId, preset);
   } catch (error) {
     if (error instanceof MissingAIKeyError) {
       return c.json({ error: error.message }, 412);
