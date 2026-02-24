@@ -7,6 +7,7 @@ import { alertsRouter } from "./alerts";
 import { recommendationsRouter } from "./recommendations";
 import { aiRouter } from "./ai";
 import { predictionsRouter } from "./predictions";
+import { aiKeysRouter } from "./ai-keys";
 
 export const appRouter = router({
   // Health check
@@ -31,6 +32,7 @@ export const appRouter = router({
   recommendations: recommendationsRouter,
   ai: aiRouter,
   predictions: predictionsRouter,
+  aiKeys: aiKeysRouter,
 });
 
 export type AppRouter = typeof appRouter;

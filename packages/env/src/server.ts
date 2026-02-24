@@ -16,6 +16,9 @@ export const env = createEnv({
     OPENAI_API_KEY: z.string().min(1).optional(),
     ANTHROPIC_API_KEY: z.string().min(1).optional(),
 
+    // Encryption key for user-provided AI API keys (used at runtime where needed)
+    AI_KEY_ENCRYPTION_SECRET: z.string().min(32).optional(),
+
     // Integration API Keys (optional)
     STRIPE_SECRET_KEY: z.string().optional(),
     STRIPE_WEBHOOK_SECRET: z.string().optional(),

@@ -22,8 +22,11 @@ import {
   departmentTypeEnum,
 } from "@ai-company/db/schema/departments";
 import { kpiDefinition, kpiValue } from "@ai-company/db/schema/metrics";
-import { env } from "@ai-company/env/server";
 import { protectedProcedure, router } from "../index";
+import {
+  getEffectiveAIConfigForUser,
+  MissingAIKeyError,
+} from "../services/ai-keys";
 
 async function checkCompanyAccess(userId: string, companyId: string) {
   const membership = await db.query.companyMember.findFirst({
@@ -43,30 +46,19 @@ async function checkCompanyAccess(userId: string, companyId: string) {
   return membership;
 }
 
-function getAIService() {
-  const provider = env.AI_PROVIDER;
-
-  const keyMap: Record<string, string | undefined> = {
-    gemini: env.GOOGLE_AI_API_KEY,
-    openai: env.OPENAI_API_KEY,
-    anthropic: env.ANTHROPIC_API_KEY,
-  };
-
-  const apiKey = keyMap[provider];
-  if (!apiKey) {
-    const envVar =
-      provider === "gemini"
-        ? "GOOGLE_AI_API_KEY"
-        : provider === "openai"
-          ? "OPENAI_API_KEY"
-          : "ANTHROPIC_API_KEY";
-    throw new TRPCError({
-      code: "PRECONDITION_FAILED",
-      message: `AI service not configured. Set ${envVar} for the "${provider}" provider.`,
-    });
+async function getAIServiceForUser(userId: string) {
+  try {
+    const { provider, apiKey } = await getEffectiveAIConfigForUser(userId);
+    return createAIService({ provider, apiKey });
+  } catch (error) {
+    if (error instanceof MissingAIKeyError) {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: error.message,
+      });
+    }
+    throw error;
   }
-
-  return createAIService({ provider, apiKey });
 }
 
 async function getCompanyContext(companyId: string): Promise<CompanyContext> {
@@ -197,7 +189,7 @@ export const aiRouter = router({
     .mutation(async ({ ctx, input }) => {
       await checkCompanyAccess(ctx.session.user.id, input.companyId);
 
-      const aiService = getAIService();
+      const aiService = await getAIServiceForUser(ctx.session.user.id);
 
       let conversationId = input.conversationId;
       let history: Array<{ role: "user" | "assistant"; content: string }> = [];
@@ -297,7 +289,7 @@ export const aiRouter = router({
     .mutation(async ({ ctx, input }) => {
       await checkCompanyAccess(ctx.session.user.id, input.companyId);
 
-      const aiService = getAIService();
+      const aiService = await getAIServiceForUser(ctx.session.user.id);
 
       const deptContext = await getDepartmentContext(
         input.companyId,
@@ -322,7 +314,7 @@ export const aiRouter = router({
     .mutation(async ({ ctx, input }) => {
       await checkCompanyAccess(ctx.session.user.id, input.companyId);
 
-      const aiService = getAIService();
+      const aiService = await getAIServiceForUser(ctx.session.user.id);
       const companyContext = await getCompanyContext(input.companyId);
 
       const departments = await db.query.department.findMany({
@@ -365,7 +357,7 @@ export const aiRouter = router({
     .mutation(async ({ ctx, input }) => {
       await checkCompanyAccess(ctx.session.user.id, input.companyId);
 
-      const aiService = getAIService();
+      const aiService = await getAIServiceForUser(ctx.session.user.id);
       const companyContext = await getCompanyContext(input.companyId);
 
       if (input.departmentType) {

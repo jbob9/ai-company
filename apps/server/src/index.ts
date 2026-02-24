@@ -1,5 +1,9 @@
 import { createContext } from "@ai-company/api/context";
 import { appRouter } from "@ai-company/api/routers/index";
+import {
+  getEffectiveAIConfigForUser,
+  MissingAIKeyError,
+} from "@ai-company/api/services/ai-keys";
 import { auth } from "@ai-company/auth";
 import { env } from "@ai-company/env/server";
 import { trpcServer } from "@hono/trpc-server";
@@ -68,17 +72,8 @@ app.use(
 
 // --- Helpers for /api/chat ---
 
-function getLanguageModel() {
-  const provider = env.AI_PROVIDER;
-  const keyMap: Record<string, string | undefined> = {
-    gemini: env.GOOGLE_AI_API_KEY,
-    openai: env.OPENAI_API_KEY,
-    anthropic: env.ANTHROPIC_API_KEY,
-  };
-  const apiKey = keyMap[provider];
-  if (!apiKey) {
-    throw new Error(`AI not configured for provider "${provider}"`);
-  }
+async function getLanguageModelForUser(userId: string) {
+  const { provider, apiKey } = await getEffectiveAIConfigForUser(userId);
   return getModel(provider, apiKey);
 }
 
@@ -257,7 +252,15 @@ app.post("/api/chat", async (c) => {
     systemPrompt = getOrchestrationSystemPrompt(companyContext);
   }
 
-  const model = getLanguageModel();
+  let model;
+  try {
+    model = await getLanguageModelForUser(userId);
+  } catch (error) {
+    if (error instanceof MissingAIKeyError) {
+      return c.json({ error: error.message }, 412);
+    }
+    throw error;
+  }
   const modelMessages = await convertToModelMessages(uiMessages);
 
   const assistantMessageId = nanoid();

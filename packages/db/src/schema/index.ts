@@ -9,3 +9,4 @@ export * from "./alerts";
 export * from "./recommendations";
 export * from "./conversations";
 export * from "./integrations";
+export * from "./user-ai-keys";

@@ -6,12 +6,15 @@ import { protectedProcedure, router } from "../index";
 import { db } from "@ai-company/db";
 import { company, companyMember } from "@ai-company/db/schema/companies";
 import { kpiDefinition, kpiValue } from "@ai-company/db/schema/metrics";
-import { env } from "@ai-company/env/server";
 import {
   createPredictionService,
   getModel,
   type CompanyContext,
 } from "@ai-company/ai";
+import {
+  getEffectiveAIConfigForUser,
+  MissingAIKeyError,
+} from "../services/ai-keys";
 
 async function checkCompanyAccess(userId: string, companyId: string) {
   const membership = await db.query.companyMember.findFirst({
@@ -31,24 +34,20 @@ async function checkCompanyAccess(userId: string, companyId: string) {
   return membership;
 }
 
-function getPredictionService() {
-  const providerName = env.AI_PROVIDER;
-  const keyMap: Record<string, string | undefined> = {
-    gemini: env.GOOGLE_AI_API_KEY,
-    openai: env.OPENAI_API_KEY,
-    anthropic: env.ANTHROPIC_API_KEY,
-  };
-
-  const apiKey = keyMap[providerName];
-  if (!apiKey) {
-    throw new TRPCError({
-      code: "PRECONDITION_FAILED",
-      message: `Prediction service not configured. Set the API key for the "${providerName}" provider.`,
-    });
+async function getPredictionServiceForUser(userId: string) {
+  try {
+    const { provider, apiKey } = await getEffectiveAIConfigForUser(userId);
+    const model = getModel(provider, apiKey);
+    return createPredictionService(model);
+  } catch (error) {
+    if (error instanceof MissingAIKeyError) {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: error.message,
+      });
+    }
+    throw error;
   }
-
-  const model = getModel(providerName, apiKey);
-  return createPredictionService(model);
 }
 
 export const predictionsRouter = router({
@@ -89,7 +88,7 @@ export const predictionsRouter = router({
         recordedAt: v.recordedAt,
       }));
 
-      const service = getPredictionService();
+      const service = await getPredictionServiceForUser(ctx.session.user.id);
       const predictions = await service.predictMetric(
         metricHistory,
         input.forecastPeriods || 3
@@ -149,7 +148,7 @@ export const predictionsRouter = router({
         industry: comp.industry || undefined,
       };
 
-      const service = getPredictionService();
+      const service = await getPredictionServiceForUser(ctx.session.user.id);
       const forecasts = await service.forecastRevenue(
         historicalRevenue,
         context,
@@ -175,7 +174,7 @@ export const predictionsRouter = router({
     .mutation(async ({ ctx, input }) => {
       await checkCompanyAccess(ctx.session.user.id, input.companyId);
 
-      const service = getPredictionService();
+      const service = await getPredictionServiceForUser(ctx.session.user.id);
       const prediction = await service.predictDealProbability(input.deal);
 
       return prediction;

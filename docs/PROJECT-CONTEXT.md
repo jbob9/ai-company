@@ -41,6 +41,7 @@
 | **Alerts** | Schema + API | DB: `alert` (severity, status, department, KPI, AI insight). API: list, getCounts, acknowledge, resolve. **UI**: Alerts page. Alert-checker / threshold evaluation may exist in `alert-checker` service. |
 | **Recommendations** | Schema + API | DB: `recommendation` (type, priority, status, outcome for learning). API exists. **UI**: Not fully surfaced in dashboard. |
 | **AI chat (streaming)** | Done | Orchestrator + per-department chat with **streaming** via AI SDK (`streamText` + `useChat`). `POST /api/chat` on Hono server; `AIHome` and chat route use `@ai-sdk/react` `useChat`. Conversations and messages stored in DB. Legacy non-streaming `ai.chat` tRPC mutation still available. |
+| **AI provider keys (BYOK)** | Done | Per-user AI API keys table (`user_ai_key`) for Gemini, OpenAI, Anthropic. Encrypted at rest with `AI_KEY_ENCRYPTION_SECRET`. Resolver in `packages/api/src/services/ai-keys.ts` chooses **user key first**, then falls back to server env keys for interactive AI (chat, analysis, predictions). |
 | **AI analysis** | Done | Department analysis and company-wide (orchestration) analysis endpoints; use department + company context and metrics. |
 | **Integrations** | Schema only | `integration` table and enums (Stripe, HubSpot, Jira, etc.). No OAuth or sync implementation yet. |
 | **Predictions** | API stub | `predictions` router present; predictive models not implemented. |
@@ -63,7 +64,7 @@
 - **Packages**: `packages/api` (tRPC, Node), `packages/db` (Drizzle, PostgreSQL), `packages/ai` (AI service: department + orchestration agents), `packages/auth`, `packages/env`.
 - **AI SDK** (Vercel `ai` package): `packages/ai` uses `@ai-sdk/openai`, `@ai-sdk/anthropic`, `@ai-sdk/google` for model access via a unified `LanguageModel` interface. `generateText` for non-streaming (analysis, recommendations, alerts). `streamText` for streaming chat. `getModel(provider, apiKey)` returns the right `LanguageModel`. System prompts (`getDepartmentSystemPrompt`, `getOrchestrationSystemPrompt`) build rich context from company stage, department docs, and metrics.
 - **Chat streaming**: `apps/server` exposes `POST /api/chat` using `streamText` + `toUIMessageStreamResponse()`. Frontend uses `useChat` from `@ai-sdk/react` with `DefaultChatTransport` pointing to that endpoint. Messages are persisted to DB in the endpoint's `onFinish` callback.
-- **Non-chat AI** (analyze department/company, recommendations, alerts): Still served via tRPC mutations using `generateText` internally.
+- **Non-chat AI** (analyze department/company, recommendations, alerts, predictions): Served via tRPC mutations using `generateText` internally. These use the same key-resolution logic (user key → system key) as chat.
 
 ---
 
@@ -86,6 +87,7 @@
 | AI service & context builders | `packages/api/src/routers/ai.ts` (e.g. `getCompanyContext`, `getDepartmentContext`, `getDepartmentMetrics`); `packages/ai` |
 | AI SDK model helper | `packages/ai/src/providers/model.ts` — `getModel(provider, apiKey)` returns `LanguageModel` |
 | Streaming chat endpoint | `apps/server/src/index.ts` — `POST /api/chat` with `streamText` + `toUIMessageStreamResponse()` |
+| AI key resolver | `packages/api/src/services/ai-keys.ts` — `getEffectiveAIConfigForUser` (user key first, then system), `getSystemAIConfig` |
 
 ---
 
@@ -107,4 +109,4 @@
 
 ---
 
-*Last updated to reflect: AI SDK migration (Vercel `ai` package) — streaming chat via `streamText`/`useChat`, model provider abstraction via `@ai-sdk/openai`/`anthropic`/`google`, non-streaming analysis via `generateText`. Multi-company refactor complete; department docs and detail page; metrics/alerts/recommendations schema and API; Phase 1 MVP in progress.*
+*Last updated to reflect: AI SDK migration (Vercel `ai` package) — streaming chat via `streamText`/`useChat`, model provider abstraction via `@ai-sdk/openai`/`anthropic`/`google`, non-streaming analysis via `generateText`; per-user BYOK AI keys with encrypted storage and resolver. Multi-company refactor complete; department docs and detail page; metrics/alerts/recommendations schema and API; Phase 1 MVP in progress.*

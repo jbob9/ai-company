@@ -22,6 +22,11 @@ export default function SettingsPage() {
   const [stage, setStage] = useState("bootstrap");
   const [industry, setIndustry] = useState("");
   const [employeeCount, setEmployeeCount] = useState("");
+  const [aiKeyInputs, setAiKeyInputs] = useState<Record<string, string>>({
+    gemini: "",
+    openai: "",
+    anthropic: "",
+  });
 
   useEffect(() => {
     if (company) {
@@ -71,13 +76,64 @@ export default function SettingsPage() {
     onError: (error) => toast.error(error.message),
   });
 
+  const { data: aiKeys } = useQuery({
+    ...trpc.aiKeys.list.queryOptions(),
+  });
+
+  const upsertAIKey = useMutation({
+    mutationFn: (variables: { provider: "gemini" | "openai" | "anthropic"; apiKey: string }) =>
+      trpcClient.aiKeys.upsert.mutate(variables),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["aiKeys", "list"] });
+      toast.success("AI API key saved");
+      setAiKeyInputs((prev) => ({ ...prev, [lastUpdatedProviderRef.current!]: "" }));
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  const deleteAIKey = useMutation({
+    mutationFn: (provider: "gemini" | "openai" | "anthropic") =>
+      trpcClient.aiKeys.delete.mutate({ provider }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["aiKeys", "list"] });
+      toast.success("AI API key removed");
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  const lastUpdatedProviderRef = { current: "" as "gemini" | "openai" | "anthropic" | "" };
+
+  const aiProviders: Array<{
+    id: "gemini" | "openai" | "anthropic";
+    label: string;
+    description: string;
+  }> = [
+    {
+      id: "gemini",
+      label: "Google Gemini",
+      description: "Fast and cost-effective models for analysis and chat.",
+    },
+    {
+      id: "openai",
+      label: "OpenAI",
+      description: "GPT models for general-purpose reasoning and coding.",
+    },
+    {
+      id: "anthropic",
+      label: "Anthropic",
+      description: "Claude models optimized for deep reasoning and safety.",
+    },
+  ];
+
   if (!companyId) return null;
 
   return (
     <div className="max-w-lg mx-auto">
       <div className="mb-6">
         <h1 className="text-xl font-semibold">Settings</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Manage company configuration</p>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          Manage company configuration and AI access
+        </p>
       </div>
 
       <div className="space-y-6">
@@ -163,6 +219,80 @@ export default function SettingsPage() {
           >
             {initDepartments.isPending ? "Initializing..." : "Initialize Departments"}
           </Button>
+        </div>
+
+        <div className="glass-panel rounded-xl p-5 space-y-4">
+          <h2 className="text-[13px] font-semibold uppercase tracking-wider text-muted-foreground">
+            AI API Keys
+          </h2>
+          <p className="text-[12px] text-muted-foreground">
+            Connect your own API keys for different AI providers. Keys are encrypted and used only
+            server-side for your AI requests.
+          </p>
+          <div className="space-y-4">
+            {aiProviders.map((provider) => {
+              const summary = aiKeys?.find((k) => k.provider === provider.id);
+              const configured = !!summary?.configured;
+              return (
+                <div
+                  key={provider.id}
+                  className="rounded-lg border border-border/60 px-3.5 py-3 flex flex-col gap-2 bg-background/40"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-[13px] font-medium">
+                        {provider.label}
+                        {configured && (
+                          <span className="ml-2 inline-flex items-center rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-500">
+                            Configured
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-[12px] text-muted-foreground">{provider.description}</p>
+                    </div>
+                    {configured && (
+                      <Button
+                        size="xs"
+                        variant="ghost"
+                        className="text-[11px]"
+                        onClick={() => deleteAIKey.mutate(provider.id)}
+                        disabled={deleteAIKey.isPending}
+                      >
+                        Remove
+                      </Button>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Input
+                      type="password"
+                      placeholder={`Paste ${provider.label} API key`}
+                      value={aiKeyInputs[provider.id] ?? ""}
+                      onChange={(e) =>
+                        setAiKeyInputs((prev) => ({ ...prev, [provider.id]: e.target.value }))
+                      }
+                      className="glass-input rounded-lg border-0 h-9 text-[13px]"
+                    />
+                    <div className="flex justify-end">
+                      <Button
+                        size="xs"
+                        className="rounded-xl"
+                        disabled={!aiKeyInputs[provider.id] || upsertAIKey.isPending}
+                        onClick={() => {
+                          lastUpdatedProviderRef.current = provider.id;
+                          upsertAIKey.mutate({
+                            provider: provider.id,
+                            apiKey: aiKeyInputs[provider.id]!,
+                          });
+                        }}
+                      >
+                        {upsertAIKey.isPending ? "Saving..." : configured ? "Update key" : "Save key"}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         <div className="glass-panel rounded-xl p-5 space-y-3 border-red-500/20">
